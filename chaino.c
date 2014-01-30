@@ -10,6 +10,7 @@
 #define DELIMETERS " \n\r\t"
 
 char *todo_response = "TODO";
+char *word_sentinel = "";
 
 struct gram {
 	char *word;
@@ -34,7 +35,7 @@ void gram_print_iter(const char *key, void *value, const void *obj);
 // Print the whole data structure
 void
 gram_print_top(struct gram *stats) {
-	printf("\"%s\" (%d)\n", stats->word, stats->value);
+	printf("\"%s\" (%d) %p\n", stats->word, stats->value, stats);
 	if (stats->next) {
 		sm_enum(stats->next, gram_print_iter, NULL);
 	}
@@ -58,15 +59,24 @@ gram_print(struct gram *stats, char *prefix) {
 		subprefix = stats->word;
 	}
 
-	printf("\"%s\" (%d)\n", subprefix, stats->value);
 	if (stats->next) {
 		sm_enum(stats->next, gram_print_iter, subprefix);
+	} else {
+		printf("\"%s\" (%d)\n", subprefix, stats->value);
 	}
 }
 
 void
 gram_print_iter(const char *key, void *value, const void *obj) {
 	gram_print((struct gram *) value, (char *) obj);
+}
+
+void
+print_ngram(char **ngram) {
+	int i;
+	for (i = 0; i < N; i++) {
+		printf("%s%s", ngram[i], i < N-1 ? " " : "\n");
+	}
 }
 
 int
@@ -84,8 +94,10 @@ learn_ngram(struct gram *stats, char **ngram) {
 
 		// If the tree does not reach this word, add a new node
 		if (!substat) {
+
 			substat = gram_new();
 			if (!substat) {
+				fprintf(stderr, "Failed to create a gram\n");
 				return 0;
 			}
 			substat->word = ngram[i];
@@ -96,10 +108,12 @@ learn_ngram(struct gram *stats, char **ngram) {
 					return 0;
 				}
 			}
+
 			if (!sm_put(stats->next, ngram[i], substat)) {
-				perror("sm_put");
+				fprintf(stderr, "Unable to put a word\n");
 				return 0;
 			}
+
 		}
 
 		// Increment the count for this i-gram
@@ -126,7 +140,7 @@ learn_sentence(struct gram *stats, char *line) {
 	// Pad the ngram with empty words,
 	// to signify the beginning of a sentence
 	for (i = 0; i < N; i++) {
-		ngram[i] = "";
+		ngram[i] = word_sentinel;
 	}
 
 	// Split the sentence into words
@@ -138,15 +152,15 @@ learn_sentence(struct gram *stats, char *line) {
 		}
 
 		// Allocate space for the new word
-		word_len = strlen(word);
-		new_word = malloc((word_len + 1) * sizeof(char));
+		word_len = strlen(word) + 1;
+		new_word = malloc(word_len * sizeof(char));
 		if (new_word == NULL) {
 			fprintf(stderr, "Unable to copy a word\n");
 		}
 		strncpy(new_word, word, word_len);
 
 		// Add the current word
-		ngram[N-1] = word;
+		ngram[N-1] = new_word;
 
 		// Learn the ngram
 		if (!learn_ngram(stats, ngram)) {
@@ -180,7 +194,6 @@ main (int argc, char *argv[]) {
 		if(argv[i][0] != '-' || argv[i][2]) {
 			if (!corpus_path) {
 				corpus_path = argv[i];
-				break;
 			} else {
 				c = -1;
 			}
