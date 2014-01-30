@@ -5,6 +5,7 @@
 #include "strmap.h"
 
 #define MAX_LINE_LENGTH  512
+#define MAX_LINE_WORDS 256
 #define N 3
 #define HASHMAP_CAPACITY 100
 #define DELIMETERS " \n\r\t"
@@ -68,7 +69,8 @@ void
 print_ngram(char **ngram) {
 	int i;
 	for (i = 0; i < N; i++) {
-		printf("%s%s", ngram[i], i < N-1 ? " " : "\n");
+		printf("\"%s\"%s", ngram[i], i < N-1 ? " " : "\n");
+		//printf("%s%s", ngram[i], i < N-1 ? " " : "\n");
 	}
 }
 
@@ -250,19 +252,22 @@ gram_pick_iter(const char *word, struct gram *stats, struct word_pick *picker) {
 
 // Pick an ngram using the markov model, starting with a (n-1)-gram,
 // going in positive or negative direction
-char **
-mm_pick_ngram(struct markov_model *model, char **prefix_ngram, int direction) {
+int
+mm_pick_ngram(struct markov_model *model, char **ngram, int direction) {
 	int i;
 	char *word;
 	struct gram *stats, *substats;
-	char *ngram[N];
-	struct word_pick picker;
+	struct word_pick picker = {0};
 
 	stats = direction > 0 ? model->forward : model->backward;
 
 	// Walk the tree to get to the distribution for this prefix
 	for (i = 0; i < N-1; i++) {
-		word = prefix_ngram[i];
+		word = ngram[i];
+		if (!word) {
+			// We don't have a word here, so we need to fill it up
+			break;
+		}
 		substats = sm_get(stats->next, word);
 		if (!substats) {
 			// The model does not include this prefix.
@@ -274,35 +279,109 @@ mm_pick_ngram(struct markov_model *model, char **prefix_ngram, int direction) {
 		}
 	}
 
+	// Pick an index within the probability distribution, for the desired word
+	picker.index_pick = rand() % stats->value;
+	// printf("pick: %d/%d\n", picker.index_pick, stats->value);
+
 	// Walk the tree with weighted random, to finish the ngram
 	for (; i < N; i++) {
 		sm_enum(stats->next, (sm_enum_func)gram_pick_iter, &picker);
 		if (!picker.word) {
-			return NULL;
+			return 0;
 		}
 		ngram[i] = picker.word;
+		// printf("Got %s\n", picker.word);
 	}
 
-	printf("Picked: ");
-	print_ngram(ngram);
+	// print_ngram(ngram);
 
-	return NULL;
+	return 1;
 }
 
+struct sentence_pick {
+	char *best_response;
+	int best_response_score;
+	struct markov_model *model;
+};
+
 // Generate a sentence using the markov model, given an initial seed ngram
-// Writes to sentence up to n chars
+// Writes to sentence
 int
-mm_generate_sentence(struct markov_model *model, char **initial_ngram, char *sentence, unsigned int n) {
+mm_generate_sentence(struct markov_model *model, char **initial_ngram, char *sentence) {
+	int i;
+	int ngram_len;
+	char *sentence_word = sentence;
+	char *ngram[N];
+	//char *response_words[MAX_LINE_WORDS];
+
 	// Generate the sentence after the seed
 	// Generate the sentence before the seed
 	// Return the combined sentence
-	return 0;
+	// printf("ngram: ");
+	// print_ngram(initial_ngram);
+	//strcpy(sentence, "hi");
+
+	// Start the ngram
+	for (i = 1; i < N; i++) {
+		ngram[i-1] = initial_ngram[i];
+	}
+	ngram[N-1] = NULL;
+	
+	printf("initial ngram: ");
+	print_ngram(ngram);
+
+	while (ngram[0] && ngram[0][0]) {
+
+		// Pick the next ngram
+		if (!mm_pick_ngram(model, ngram, 1)) {
+			return 0;
+		}
+
+		// printf("picked %s\n", ngram[N-1]);
+		ngram_len = strlen(ngram[N-1]);
+
+		//response_words[j++] = ngram[N-1];
+		strncpy(sentence_word, ngram[N-1], ngram_len);
+		sentence_word += ngram_len + 1;
+		sentence_word[-1] = ' ';
+
+		// Move back the previous words
+		for (i = 1; i < N; i++) {
+			ngram[i-1] = ngram[i];
+		}
+
+	}
+
+	sentence_word[-1] = '\0';
+	printf("sentence: %s\n", sentence);
+
+	return 1;
 }
 
-// Read an ngram from an input sentence
+int
+score_response(char *response) {
+	return strlen(response);
+}
+
+// Read an ngram from an input sentence, and generate a sentence using it
 int
 mm_respond_ngram_iter(char **ngram, void *obj) {
+	struct sentence_pick *picker = obj;
+	char response[MAX_LINE_LENGTH];
+	int score;
+
 	// Generate a candidate response
+	if (!mm_generate_sentence(picker->model, ngram, response)) {
+		return 0;
+	}
+
+	score = score_response(response);
+	if (score > picker->best_response_score) {
+		picker->best_response_score = score;
+		strncpy(picker->best_response, response, MAX_LINE_LENGTH);
+	}
+
+	return 1;
 }
 
 // Learn a sentence, and generate a response to it.
@@ -311,14 +390,19 @@ respond_and_learn(struct markov_model *model, char *line, char *response) {
 	int line_len = strlen(line);
 	char *line_copy;
 	char *word;
+	struct sentence_pick picker = {
+		.model = model,
+		.best_response = response,
+		.best_response_score = ~1
+	};
 
 	line_copy = malloc(line_len * sizeof(char));
 	if (!line_copy) return 0;
 	strncpy(line_copy, line, line_len);
 
 	// Tokenize the sentence and generate candidate responses
-	if (!tokenize_sentence(line, mm_respond_ngram_iter, model)) {
-		fprintf(stderr, "Failed to learn a sentence\n");
+	if (!tokenize_sentence(line, mm_respond_ngram_iter, &picker)) {
+		fprintf(stderr, "Failed to pick ngrams");
 		return 0;
 	}
 
