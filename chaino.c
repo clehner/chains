@@ -40,17 +40,13 @@ void gram_print_iter(const char *key, void *value, const void *obj);
 void
 gram_print_prefixed(struct gram *stats, char *prefix) {
 	char *subprefix;
-	int prefix_len;
+	int subprefix_len;
 
 	// Concat the parent words prefix with the current word
 	if (prefix) {
-		prefix_len = strlen(prefix);
-		subprefix = malloc((prefix_len + 6 + strlen(stats->word)) *
-				sizeof(char));
-		strncpy(subprefix, "    ", 4);
-		strncpy(subprefix+4, prefix, prefix_len);
-		subprefix[prefix_len+4] = ' ';
-		strcpy(subprefix + prefix_len + 5, stats->word);
+		subprefix_len = strlen(prefix) + 6 + strlen(stats->word);
+		subprefix = malloc(subprefix_len * sizeof(char));
+		snprintf(subprefix, subprefix_len, "    %s %s", prefix, stats->word);
 	} else {
 		subprefix = stats->word;
 	}
