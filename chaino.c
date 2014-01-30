@@ -12,6 +12,11 @@
 char *todo_response = "TODO";
 char *word_sentinel = "";
 
+struct markov_model {
+	struct gram *forward;
+	struct gram *backward;
+};
+
 struct gram {
 	char *word;
 	int value;
@@ -76,17 +81,22 @@ print_ngram(char **ngram) {
 }
 
 int
-learn_ngram(struct gram *stats, char **ngram) {
+learn_ngram(struct gram *stats, char **ngram, int direction) {
 	int i;
 	struct gram *substat;
+	char *word;
 
 	// Increment total count of 1-grams
 	stats->value++;
 
 	// Add the 1-gram, then the 2-gram, etc, up to N
 	for (i = 0; i < N; i++) {
+
+		// Select the word depending on the direction
+		word = ngram[direction > 0 ? i : N - i - 1];
+
 		// Lookup by the next word
-		substat = sm_get(stats->next, ngram[i]);
+		substat = sm_get(stats->next, word);
 
 		// If the tree does not reach this word, add a new node
 		if (!substat) {
@@ -96,7 +106,7 @@ learn_ngram(struct gram *stats, char **ngram) {
 				fprintf(stderr, "Failed to create a gram\n");
 				return 0;
 			}
-			substat->word = ngram[i];
+			substat->word = word;
 			if (stats->next == NULL) {
 				// Create a new hashmap here
 				stats->next = sm_new(HASHMAP_CAPACITY);
@@ -105,7 +115,7 @@ learn_ngram(struct gram *stats, char **ngram) {
 				}
 			}
 
-			if (!sm_put(stats->next, ngram[i], substat)) {
+			if (!sm_put(stats->next, word, substat)) {
 				fprintf(stderr, "Unable to put a word\n");
 				return 0;
 			}
@@ -122,10 +132,17 @@ learn_ngram(struct gram *stats, char **ngram) {
 	return 1;
 }
 
+int
+mm_learn_ngram(struct markov_model *model, char **ngram) {
+	return
+		learn_ngram(model->forward, ngram, 1) &&
+		learn_ngram(model->backward, ngram, -1);
+}
+
 // Learn a sentence.
 // Alters the line string argument
 int
-learn_sentence(struct gram *stats, char *line) {
+mm_learn_sentence(struct markov_model *model, char *line) {
 	char *word;
 	char *new_word;
 	char *ngram[N];
@@ -141,6 +158,7 @@ learn_sentence(struct gram *stats, char *line) {
 
 	// Split the sentence into words
 	for (word = strtok(line, DELIMETERS); word; word = strtok(NULL, DELIMETERS)) {
+
 		// Organize the words into ngrams
 		// Move back the previous words
 		for (i = 1; i < N; i++) {
@@ -152,6 +170,7 @@ learn_sentence(struct gram *stats, char *line) {
 		new_word = malloc(word_len * sizeof(char));
 		if (new_word == NULL) {
 			fprintf(stderr, "Unable to copy a word\n");
+			return 0;
 		}
 		strncpy(new_word, word, word_len);
 
@@ -159,18 +178,81 @@ learn_sentence(struct gram *stats, char *line) {
 		ngram[N-1] = new_word;
 
 		// Learn the ngram
-		if (!learn_ngram(stats, ngram)) {
+		if (!mm_learn_ngram(model, ngram)) {
 			fprintf(stderr, "Failed to learn an n-gram\n");
 		}
 	}
+
+	// Pad the end of the sentence with empty words,
+	// to signify the end of a sentence.
+
+	// Unless the sentence was empty: then the end padding
+	// collapses with the start padding.
+	if (!new_word) {
+		// Learn one blank ngram
+		if (!mm_learn_ngram(model, ngram)) {
+			fprintf(stderr, "Failed to learn an n-gram\n");
+		}
+
+	} else for (i = N-1; i > 0; i--) {
+		int j;
+
+		// Move back the previous words
+		for (j = 1; j < N; j++) {
+			ngram[j-1] = ngram[j];
+		}
+
+		// Add the sentinel
+		ngram[N-1] = word_sentinel;
+
+		// Learn the ngram
+		if (!mm_learn_ngram(model, ngram)) {
+			fprintf(stderr, "Failed to learn an n-gram\n");
+		}
+	}
+
 	return 1;
 }
 
 // Learn a sentence, and generate a response to it.
 int
-respond_and_learn(struct gram *stats, char *line, char *response) {
+respond_and_learn(struct markov_model *model, char *line, char *response) {
 	strcpy(response, todo_response);
 	return 1;
+}
+
+struct markov_model*
+mm_new() {
+	struct markov_model *model = malloc(sizeof (struct markov_model));
+	if (!model) return NULL;
+
+	// Create the ngram model for forward lookups
+	model->forward = gram_new();
+	if (!model->forward) {
+		free(model);
+		return NULL;
+	}
+	model->forward->word = "";
+	model->forward->next = sm_new(HASHMAP_CAPACITY);
+
+	// Create the ngram model for backward lookups
+	model->backward = gram_new();
+	if (!model->backward) {
+		free(model);
+		return NULL;
+	}
+	model->backward->word = "";
+	model->backward->next = sm_new(HASHMAP_CAPACITY);
+
+	return model;
+}
+
+void
+mm_print(struct markov_model *model) {
+	printf("FORWARD\n");
+	gram_print(model->forward);
+	printf("BACKWARD\n");
+	gram_print(model->backward);
 }
 
 int
@@ -178,7 +260,7 @@ main (int argc, char *argv[]) {
 	int i;
 	char c;
 
-	struct gram *stats;
+	struct markov_model *model;
 	char *corpus_path = NULL;
 	FILE *corpus_file;
 	char line[MAX_LINE_LENGTH];
@@ -215,10 +297,11 @@ main (int argc, char *argv[]) {
 		return 1;
 	}
 
-	stats = gram_new();
-	// Special top-level gram
-	stats->word = "";
-	stats->next = sm_new(HASHMAP_CAPACITY);
+	model = mm_new();
+	if (!model) {
+		fprintf(stderr, "Unable to create markov model\n");
+		return 1;
+	}
 
 	// Each line of the corpus is a sentence.
 	// Read each line.
@@ -228,7 +311,7 @@ main (int argc, char *argv[]) {
 			break;
 		}
 		// Learn the ngram frequencies of the sentence
-		if (!learn_sentence(stats, line)) {
+		if (!mm_learn_sentence(model, line)) {
 			fprintf(stderr, "Failed to learn a sentence\n");
 			// Attempt no recovery
 			break;
@@ -238,7 +321,7 @@ main (int argc, char *argv[]) {
 
 	// Print the data structure
 	if (dump_table) {
-		gram_print_top(stats);
+		mm_print(model);
 		return 0;
 	}
 
@@ -249,7 +332,7 @@ main (int argc, char *argv[]) {
 			break;
 		}
 		// Respond to the message
-		if (!respond_and_learn(stats, line, response)) {
+		if (!respond_and_learn(model, line, response)) {
 			fprintf(stderr, "Failed to respond\n");
 		} else {
 			printf("Response: %s\n", response);
