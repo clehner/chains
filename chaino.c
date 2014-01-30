@@ -9,7 +9,6 @@
 #define HASHMAP_CAPACITY 100
 #define DELIMETERS " \n\r\t"
 
-char *todo_response = "TODO";
 char *word_sentinel = "";
 
 struct markov_model {
@@ -34,41 +33,35 @@ gram_new() {
 	return stats;
 }
 
-void gram_print_iter(const char *key, void *value, const void *obj);
-
-typedef int(*ngram_enum_func)(char **ngram, void *obj);
+int gram_print_iter(const char *key, void *value, void *obj);
 
 // Print the whole data structure
-void
-gram_print_prefixed(struct gram *stats, char *prefix) {
+int
+gram_print_prefixed(char *word, struct gram *stats, char *prefix) {
 	char *subprefix;
 	int subprefix_len;
 
 	// Concat the parent words prefix with the current word
 	if (prefix) {
-		subprefix_len = strlen(prefix) + 6 + strlen(stats->word);
+		subprefix_len = strlen(prefix) + 6 + strlen(word);
 		subprefix = malloc(subprefix_len * sizeof(char));
-		snprintf(subprefix, subprefix_len, "    %s %s", prefix, stats->word);
+		snprintf(subprefix, subprefix_len, "    %s %s", prefix, word);
 	} else {
-		subprefix = stats->word;
+		subprefix = word;
 	}
 
 	printf("%s (%d)\n", subprefix, stats->value);
 
 	if (stats->next) {
-		sm_enum(stats->next, gram_print_iter, subprefix);
+		sm_enum(stats->next, (sm_enum_func)gram_print_prefixed, subprefix);
 	}
-}
-
-void
-gram_print_iter(const char *key, void *value, const void *obj) {
-	gram_print_prefixed((struct gram *) value, (char *) obj);
+	return 1;
 }
 
 // Print the whole data structure
 void
 gram_print(struct gram *stats) {
-	gram_print_prefixed(stats, NULL);
+	gram_print_prefixed("", stats, NULL);
 }
 
 void
@@ -148,6 +141,11 @@ mm_learn_ngram_iter (char **ngram, void *obj) {
 	return 1;
 }
 
+typedef int(*ngram_enum_func)(char **ngram, void *obj);
+
+// Tokenize a sentence and execute the callback with each ngram.
+// Alters the line string argument.
+// obj is client-specified, and passed to the callback
 int
 tokenize_sentence(char *line, ngram_enum_func ngram_callback, void *obj) {
 	char *word;
@@ -231,10 +229,99 @@ mm_learn_sentence(struct markov_model *model, char *line) {
 	}
 }
 
+struct word_pick {
+	unsigned int index_pick;
+	unsigned int index_sum;
+	char *word;
+};
+
+int
+gram_pick_iter(const char *word, struct gram *stats, struct word_pick *picker) {
+	// Increment the running total
+	picker->index_sum += stats->value;
+	// Check if we are at the desired index
+	if (picker->index_sum > picker->index_pick) {
+		// Found our word
+		picker->word = stats->word;
+		return 0;
+	}
+	return 1;
+}
+
+// Pick an ngram using the markov model, starting with a (n-1)-gram,
+// going in positive or negative direction
+char **
+mm_pick_ngram(struct markov_model *model, char **prefix_ngram, int direction) {
+	int i;
+	char *word;
+	struct gram *stats, *substats;
+	char *ngram[N];
+	struct word_pick picker;
+
+	stats = direction > 0 ? model->forward : model->backward;
+
+	// Walk the tree to get to the distribution for this prefix
+	for (i = 0; i < N-1; i++) {
+		word = prefix_ngram[i];
+		substats = sm_get(stats->next, word);
+		if (!substats) {
+			// The model does not include this prefix.
+			// Stop here and pick the remaining words using weighted random
+			break;
+		} else {
+			ngram[i] = word;
+			stats = substats;
+		}
+	}
+
+	// Walk the tree with weighted random, to finish the ngram
+	for (; i < N; i++) {
+		sm_enum(stats->next, (sm_enum_func)gram_pick_iter, &picker);
+		if (!picker.word) {
+			return NULL;
+		}
+		ngram[i] = picker.word;
+	}
+
+	printf("Picked: ");
+	print_ngram(ngram);
+
+	return NULL;
+}
+
+// Generate a sentence using the markov model, given an initial seed ngram
+// Writes to sentence up to n chars
+int
+mm_generate_sentence(struct markov_model *model, char **initial_ngram, char *sentence, unsigned int n) {
+	// Generate the sentence after the seed
+	// Generate the sentence before the seed
+	// Return the combined sentence
+	return 0;
+}
+
+// Read an ngram from an input sentence
+int
+mm_respond_ngram_iter(char **ngram, void *obj) {
+	// Generate a candidate response
+}
+
 // Learn a sentence, and generate a response to it.
 int
 respond_and_learn(struct markov_model *model, char *line, char *response) {
-	strcpy(response, todo_response);
+	int line_len = strlen(line);
+	char *line_copy;
+	char *word;
+
+	line_copy = malloc(line_len * sizeof(char));
+	if (!line_copy) return 0;
+	strncpy(line_copy, line, line_len);
+
+	// Tokenize the sentence and generate candidate responses
+	if (!tokenize_sentence(line, mm_respond_ngram_iter, model)) {
+		fprintf(stderr, "Failed to learn a sentence\n");
+		return 0;
+	}
+
 	return 1;
 }
 
