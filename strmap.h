@@ -56,15 +56,14 @@ typedef struct StrMap StrMap;
  * key: A pointer to a null-terminated C string. The string must not
  * be modified by the client.
  *
- * value: A pointer to a null-terminated C string. The string must
- * not be modified by the client.
+ * value: The data stored.
  *
  * obj: A pointer to a client-specific object. This parameter may be
  * null.
  *
  * Return value: None.
  */
-typedef void(*sm_enum_func)(const char *key, const char *value, const void *obj);
+typedef void(*sm_enum_func)(const char *key, void *value, const void *obj);
 
 /*
  * Creates a string map.
@@ -102,18 +101,9 @@ void sm_delete(StrMap *map);
  * key: A pointer to a null-terminated C string. This parameter cannot
  * be null.
  *
- * out_buf: A pointer to an output buffer which will contain the value,
- * if it exists and fits into the buffer.
- *
- * n_out_buf: The size of the output buffer in bytes.
- *
- * Return value: If out_buf is set to null and n_out_buf is set to 0 the return
- * value will be the number of bytes required to store the value (if it exists)
- * and its null-terminator. For all other parameter configurations the return value
- * is 1 if an associated value was found and completely copied into the output buffer,
- * 0 otherwise.
+ * Return value: the stored value if found, NULL otherwise.
  */
-int sm_get(const StrMap *map, const char *key, char *out_buf, unsigned int n_out_buf);
+void *sm_get(const StrMap *map, const char *key);
 
 /*
  * Queries the existence of a key.
@@ -141,13 +131,11 @@ int sm_exists(const StrMap *map, const char *key);
  * cannot be null. The string must have a string length > 0. The
  * string will be copied.
  *
- * value: A pointer to a null-terminated C string. This parameter
- * cannot be null. The string must have a string length > 0. The
- * string will be copied.
+ * value: The data to store. Probably a pointer.
  *
  * Return value: 1 if the association succeeded, 0 otherwise.
  */
-int sm_put(StrMap *map, const char *key, const char *value);
+int sm_put(StrMap *map, const char *key, void *value);
 
 /*
  * Returns the number of associations between keys and values.

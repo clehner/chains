@@ -42,7 +42,7 @@ typedef struct Bucket Bucket;
 
 struct Pair {
 	char *key;
-	char *value;
+	void *value;
 };
 
 struct Bucket {
@@ -94,7 +94,6 @@ void sm_delete(StrMap *map)
 		j = 0;
 		while(j < m) {
 			free(pair->key);
-			free(pair->value);
 			pair++;
 			j++;
 		}
@@ -106,7 +105,7 @@ void sm_delete(StrMap *map)
 	free(map);
 }
 
-int sm_get(const StrMap *map, const char *key, char *out_buf, unsigned int n_out_buf)
+void* sm_get(const StrMap *map, const char *key)
 {
 	unsigned int index;
 	Bucket *bucket;
@@ -121,20 +120,7 @@ int sm_get(const StrMap *map, const char *key, char *out_buf, unsigned int n_out
 	index = hash(key) % map->count;
 	bucket = &(map->buckets[index]);
 	pair = get_pair(bucket, key);
-	if (pair == NULL) {
-		return 0;
-	}
-	if (out_buf == NULL && n_out_buf == 0) {
-		return strlen(pair->value) + 1;
-	}
-	if (out_buf == NULL) {
-		return 0;
-	}
-	if (strlen(pair->value) >= n_out_buf) {
-		return 0;
-	}
-	strcpy(out_buf, pair->value);
-	return 1;
+	return pair ? pair->value : NULL;
 }
 
 int sm_exists(const StrMap *map, const char *key)
@@ -158,13 +144,12 @@ int sm_exists(const StrMap *map, const char *key)
 	return 1;
 }
 
-int sm_put(StrMap *map, const char *key, const char *value)
+int sm_put(StrMap *map, const char *key, void *value)
 {
-	unsigned int key_len, value_len, index;
+	unsigned int key_len, index;
 	Bucket *bucket;
 	Pair *tmp_pairs, *pair;
-	char *tmp_value;
-	char *new_key, *new_value;
+	char *new_key;
 
 	if (map == NULL) {
 		return 0;
@@ -173,7 +158,6 @@ int sm_put(StrMap *map, const char *key, const char *value)
 		return 0;
 	}
 	key_len = strlen(key);
-	value_len = strlen(value);
 	/* Get a pointer to the bucket the key string hashes to */
 	index = hash(key) % map->count;
 	bucket = &(map->buckets[index]);
@@ -184,28 +168,12 @@ int sm_put(StrMap *map, const char *key, const char *value)
 		/* The bucket contains a pair that matches the provided key,
 		 * change the value for that pair to the new value.
 		 */
-		if (strlen(pair->value) < value_len) {
-			/* If the new value is larger than the old value, re-allocate
-			 * space for the new larger value.
-			 */
-			tmp_value = realloc(pair->value, (value_len + 1) * sizeof(char));
-			if (tmp_value == NULL) {
-				return 0;
-			}
-			pair->value = tmp_value;
-		}
-		/* Copy the new value into the pair that matches the key */
-		strcpy(pair->value, value);
+		pair->value = value;
 		return 1;
 	}
-	/* Allocate space for a new key and value */
+	/* Allocate space for a new key */
 	new_key = malloc((key_len + 1) * sizeof(char));
 	if (new_key == NULL) {
-		return 0;
-	}
-	new_value = malloc((value_len + 1) * sizeof(char));
-	if (new_value == NULL) {
-		free(new_key);
 		return 0;
 	}
 	/* Create a key-value pair */
@@ -216,7 +184,6 @@ int sm_put(StrMap *map, const char *key, const char *value)
 		bucket->pairs = malloc(sizeof(Pair));
 		if (bucket->pairs == NULL) {
 			free(new_key);
-			free(new_value);
 			return 0;
 		}
 		bucket->count = 1;
@@ -228,7 +195,6 @@ int sm_put(StrMap *map, const char *key, const char *value)
 		tmp_pairs = realloc(bucket->pairs, (bucket->count + 1) * sizeof(Pair));
 		if (tmp_pairs == NULL) {
 			free(new_key);
-			free(new_value);
 			return 0;
 		}
 		bucket->pairs = tmp_pairs;
@@ -237,10 +203,9 @@ int sm_put(StrMap *map, const char *key, const char *value)
 	/* Get the last pair in the chain for the bucket */
 	pair = &(bucket->pairs[bucket->count - 1]);
 	pair->key = new_key;
-	pair->value = new_value;
-	/* Copy the key and its value into the key-value pair */
+	pair->value = value;
+	/* Copy the key into the key-value pair */
 	strcpy(pair->key, key);
-	strcpy(pair->value, value);
 	return 1;
 }
 
