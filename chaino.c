@@ -29,21 +29,11 @@ gram_new() {
 	return stats;
 }
 
-//typedef void(*sm_enum_func)(const char *key, void *value, const void *obj);
 void gram_print_iter(const char *key, void *value, const void *obj);
 
 // Print the whole data structure
 void
-gram_print_top(struct gram *stats) {
-	printf("\"%s\" (%d) %p\n", stats->word, stats->value, stats);
-	if (stats->next) {
-		sm_enum(stats->next, gram_print_iter, NULL);
-	}
-}
-
-// Print the whole data structure
-void
-gram_print(struct gram *stats, char *prefix) {
+gram_print_prefixed(struct gram *stats, char *prefix) {
 	char *subprefix;
 	int prefix_len;
 
@@ -59,16 +49,22 @@ gram_print(struct gram *stats, char *prefix) {
 		subprefix = stats->word;
 	}
 
+	printf("\"%s\" (%d)\n", subprefix, stats->value);
+
 	if (stats->next) {
 		sm_enum(stats->next, gram_print_iter, subprefix);
-	} else {
-		printf("\"%s\" (%d)\n", subprefix, stats->value);
 	}
 }
 
 void
 gram_print_iter(const char *key, void *value, const void *obj) {
-	gram_print((struct gram *) value, (char *) obj);
+	gram_print_prefixed((struct gram *) value, (char *) obj);
+}
+
+// Print the whole data structure
+void
+gram_print(struct gram *stats) {
+	gram_print_prefixed(stats, NULL);
 }
 
 void
