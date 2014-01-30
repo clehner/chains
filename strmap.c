@@ -238,7 +238,7 @@ int sm_get_count(const StrMap *map)
 	return count;
 }
 
-int sm_enum(const StrMap *map, sm_enum_func enum_func, const void *obj)
+int sm_enum(const StrMap *map, sm_enum_func enum_func, void *obj)
 {
 	unsigned int i, j, n, m;
 	Bucket *bucket;
@@ -258,7 +258,9 @@ int sm_enum(const StrMap *map, sm_enum_func enum_func, const void *obj)
 		m = bucket->count;
 		j = 0;
 		while (j < m) {
-			enum_func(pair->key, pair->value, obj);
+			if (!enum_func(pair->key, pair->value, obj)) {
+				return 2;
+			}
 			pair++;
 			j++;
 		}

@@ -61,9 +61,9 @@ typedef struct StrMap StrMap;
  * obj: A pointer to a client-specific object. This parameter may be
  * null.
  *
- * Return value: None.
+ * Return value: 1 to continue iterating, 0 to stop.
  */
-typedef void(*sm_enum_func)(const char *key, void *value, const void *obj);
+typedef int(*sm_enum_func)(const char *key, void *value, void *obj);
 
 /*
  * Creates a string map.
@@ -163,9 +163,11 @@ int sm_get_count(const StrMap *map);
  * passed back to the client's callback function. This parameter can
  * be null.
  *
- * Return value: 1 if enumeration completed, 0 otherwise.
+ * Return value: 1 if enumeration completed,
+ *               2 if the callback ended enumeration,
+ *               0 otherwise.
  */
-int sm_enum(const StrMap *map, sm_enum_func enum_func, const void *obj);
+int sm_enum(const StrMap *map, sm_enum_func enum_func, void *obj);
 
 #ifdef __cplusplus
 }
