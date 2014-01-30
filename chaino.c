@@ -36,6 +36,8 @@ gram_new() {
 
 void gram_print_iter(const char *key, void *value, const void *obj);
 
+typedef int(*ngram_enum_func)(char **ngram, void *obj);
+
 // Print the whole data structure
 void
 gram_print_prefixed(struct gram *stats, char *prefix) {
@@ -136,14 +138,22 @@ mm_learn_ngram(struct markov_model *model, char **ngram) {
 		learn_ngram(model->backward, ngram, -1);
 }
 
-// Learn a sentence.
-// Alters the line string argument
+// Learn an ngram. Passed from the tokenizer
 int
-mm_learn_sentence(struct markov_model *model, char *line) {
+mm_learn_ngram_iter (char **ngram, void *obj) {
+	if (!mm_learn_ngram((struct markov_model *) obj, ngram)) {
+		fprintf(stderr, "Failed to learn an n-gram\n");
+		return 0;
+	}
+	return 1;
+}
+
+int
+tokenize_sentence(char *line, ngram_enum_func ngram_callback, void *obj) {
 	char *word;
 	char *new_word;
 	char *ngram[N];
-	unsigned int i, word_len;
+	unsigned int i, word_len = 0;
 
 	if (!line) return 0;
 
@@ -174,9 +184,9 @@ mm_learn_sentence(struct markov_model *model, char *line) {
 		// Add the current word
 		ngram[N-1] = new_word;
 
-		// Learn the ngram
-		if (!mm_learn_ngram(model, ngram)) {
-			fprintf(stderr, "Failed to learn an n-gram\n");
+		// Emit the ngram
+		if (!ngram_callback(ngram, obj)) {
+			return 1;
 		}
 	}
 
@@ -185,10 +195,10 @@ mm_learn_sentence(struct markov_model *model, char *line) {
 
 	// Unless the sentence was empty: then the end padding
 	// collapses with the start padding.
-	if (!new_word) {
-		// Learn one blank ngram
-		if (!mm_learn_ngram(model, ngram)) {
-			fprintf(stderr, "Failed to learn an n-gram\n");
+	if (word_len == 0) {
+		// Emit one blank ngram
+		if (!ngram_callback(ngram, obj)) {
+			return 1;
 		}
 
 	} else for (i = N-1; i > 0; i--) {
@@ -202,13 +212,23 @@ mm_learn_sentence(struct markov_model *model, char *line) {
 		// Add the sentinel
 		ngram[N-1] = word_sentinel;
 
-		// Learn the ngram
-		if (!mm_learn_ngram(model, ngram)) {
-			fprintf(stderr, "Failed to learn an n-gram\n");
+		// Emit the ngram
+		if (!ngram_callback(ngram, obj)) {
+			return 1;
 		}
 	}
 
 	return 1;
+}
+
+// Learn a sentence.
+// Alters the line string argument
+int
+mm_learn_sentence(struct markov_model *model, char *line) {
+	if (!tokenize_sentence(line, mm_learn_ngram_iter, model)) {
+		fprintf(stderr, "Failed to learn a sentence\n");
+		return 0;
+	}
 }
 
 // Learn a sentence, and generate a response to it.
