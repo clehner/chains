@@ -3,6 +3,8 @@ BINDIR = ${PREFIX}/bin
 
 SRC = chaino.c strmap.c
 OBJ = ${SRC:.c=.o}
+DEPS = $(wildcard deps/*/*.c)
+CFLAGS = -Ideps -std=c99
 
 all: chaino
 
@@ -10,7 +12,7 @@ all: chaino
 	${CC} -c ${CFLAGS} $<
 
 chaino: ${OBJ}
-	@${CC} -o $@ ${OBJ} ${LDFLAGS}
+	${CC} -o $@ ${OBJ} ${DEPS} ${LDFLAGS}
 
 install-dirs:
 	install -d ${DESTDIR}${BINDIR}

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
-#include "strmap.h"
+#include "hash/hash.h"
 
 #define MAX_LINE_LENGTH  512
 #define MAX_LINE_WORDS 256
@@ -20,7 +20,7 @@ struct markov_model {
 
 struct gram {
 	int value;
-	StrMap *next; // map words to gram structs
+	hash_t *next; // map words to gram structs
 };
 
 struct gram *
@@ -33,8 +33,6 @@ gram_new() {
 	memset(stats, 0, sizeof (struct gram));
 	return stats;
 }
-
-int gram_print_iter(const char *key, void *value, void *obj);
 
 // Print the whole data structure
 int
@@ -54,7 +52,9 @@ gram_print_prefixed(char *word, struct gram *stats, char *prefix) {
 	printf("%s (%d)\n", subprefix, stats->value);
 
 	if (stats->next) {
-		sm_enum(stats->next, (sm_enum_func)gram_print_prefixed, subprefix);
+		hash_each(stats->next, {
+			gram_print_prefixed((char *)key, val, subprefix);
+		});
 	}
 	return 1;
 }
@@ -78,7 +78,7 @@ int
 learn_ngram(struct gram *stats, char **ngram, int direction) {
 	int i;
 	struct gram *substat;
-	char *word;
+	char *word, *new_word;
 
 	// Increment total count of 1-grams
 	stats->value++;
@@ -90,7 +90,7 @@ learn_ngram(struct gram *stats, char **ngram, int direction) {
 		word = ngram[direction > 0 ? i : N - i - 1];
 
 		// Lookup by the next word
-		substat = sm_get(stats->next, word);
+		substat = stats->next ? hash_get(stats->next, word) : NULL;
 
 		// If the tree does not reach this word, add a new node
 		if (!substat) {
@@ -102,17 +102,19 @@ learn_ngram(struct gram *stats, char **ngram, int direction) {
 			}
 			if (stats->next == NULL) {
 				// Create a new hashmap here
-				stats->next = sm_new(HASHMAP_CAPACITY);
+				stats->next = hash_new();
 				if (!stats->next) {
 					return 0;
 				}
 			}
 
-			if (!sm_put(stats->next, word, substat)) {
-				fprintf(stderr, "Unable to put a word\n");
+			new_word = malloc(strlen(word) + 1);
+			if (!new_word) {
+				perror("strdup");
 				return 0;
 			}
-
+			strcpy(new_word, word);
+			hash_set(stats->next, new_word, substat);
 		}
 
 		// Increment the count for this i-gram
@@ -230,26 +232,6 @@ mm_learn_sentence(struct markov_model *model, char *line) {
 	}
 }
 
-struct word_pick {
-	unsigned int index_pick;
-	unsigned int index_sum;
-	char *word;
-};
-
-int
-gram_pick_iter(const char *word, struct gram *stats, struct word_pick *picker) {
-	// Increment the running total
-	picker->index_sum += stats->value;
-	// Check if we are at the desired index
-	if (picker->index_sum > picker->index_pick) {
-		// Found our word
-		// printf("found word %s\n", word);
-		picker->word = (char *)word;
-		return 0;
-	}
-	return 1;
-}
-
 // Pick an ngram using the markov model, starting with a (n-1)-gram,
 // going in positive or negative direction. Return 1 if no ngram was found
 int
@@ -257,7 +239,9 @@ mm_pick_ngram(struct markov_model *model, char **ngram, int direction) {
 	int i;
 	char *word;
 	struct gram *stats, *substats;
-	struct word_pick picker;
+
+	unsigned int picker_index_pick;
+	unsigned int picker_index_sum;
 
 	stats = direction > 0 ? model->forward : model->backward;
 
@@ -269,7 +253,7 @@ mm_pick_ngram(struct markov_model *model, char **ngram, int direction) {
 			// return 0;
 			break;
 		}
-		substats = sm_get(stats->next, word);
+		substats = hash_get(stats->next, word);
 		if (!substats) {
 			// The model does not include this prefix.
 			// Abort picking
@@ -285,24 +269,33 @@ mm_pick_ngram(struct markov_model *model, char **ngram, int direction) {
 		// memset(&picker, 0, sizeof (struct word_pick));
 
 		// Pick an index within the probability distribution, for the desired word
-		picker.index_pick = rand() % stats->value;
-		picker.index_sum = 0;
-		picker.word = NULL;
-		// printf("pick: %d/%d\n", picker.index_pick, stats->value);
-		//
-		sm_enum(stats->next, (sm_enum_func)gram_pick_iter, &picker);
+		picker_index_pick = rand() % stats->value;
+		picker_index_sum = 0;
+		// printf("pick: %d/%d\n", picker_index_pick, stats->value);
+
+		hash_each(stats->next, {
+			// Increment the running total
+			picker_index_sum += ((struct gram *)val)->value;
+			// Check if we are at the desired index
+			if (picker_index_sum > picker_index_pick) {
+				// Found our word
+				// printf("found word %s\n", word);
+				ngram[i] = (char *)key;
+				return 1;
+			}
+		});
+
 		// printf("word: %s\n", picker.word);
-		if (!picker.word) {
-			printf("no word\n");
-			return 0;
-		}
-		ngram[i] = picker.word;
+		// if (!picker_word) {
+			// printf("no word\n");
+			// return 0;
+		// }
 		// printf("Got %s\n", picker.word);
 	}
 
 	// print_ngram(ngram);
 
-	return 1;
+	return 0;
 }
 
 struct sentence_pick {
@@ -372,7 +365,7 @@ mm_generate_sentence(struct markov_model *model, char **initial_ngram, char *sen
 	} while (ngram[N-1] && ngram[N-1][0]);
 
 	sentence_word[-1] = '\0';
-	printf("Sentence: %s\n", sentence);
+	// printf("Sentence: %s\n", sentence);
 
 	return 1;
 }
@@ -396,8 +389,8 @@ mm_respond_ngram_iter(char **ngram, void *obj) {
 	// Clear the response array
 	response[0] = '\0';
 
-	printf("Got gram: ");
-	print_ngram(ngram);
+	// printf("Got gram: ");
+	// print_ngram(ngram);
 
 	// Generate a candidate response
 	if (mm_generate_sentence(picker->model, ngram, response)) {
@@ -447,7 +440,7 @@ mm_new() {
 		free(model);
 		return NULL;
 	}
-	model->forward->next = sm_new(HASHMAP_CAPACITY);
+	model->forward->next = hash_new();
 
 	// Create the ngram model for backward lookups
 	model->backward = gram_new();
@@ -455,7 +448,7 @@ mm_new() {
 		free(model);
 		return NULL;
 	}
-	model->backward->next = sm_new(HASHMAP_CAPACITY);
+	model->backward->next = hash_new();
 
 	return model;
 }
@@ -561,7 +554,7 @@ main (int argc, char *argv[]) {
 		if (!respond_and_learn(model, line, response)) {
 			fprintf(stderr, "Failed to respond\n");
 		} else {
-			printf("Response: %s\n", response);
+			printf("%s\n", response);
 		}
 	}
 }
