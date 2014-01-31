@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 #include "strmap.h"
 
 #define MAX_LINE_LENGTH  512
@@ -18,9 +19,8 @@ struct markov_model {
 };
 
 struct gram {
-	char *word;
 	int value;
-	StrMap *next; // map following words to gram structs
+	StrMap *next; // map words to gram structs
 };
 
 struct gram *
@@ -100,7 +100,6 @@ learn_ngram(struct gram *stats, char **ngram, int direction) {
 				fprintf(stderr, "Failed to create a gram\n");
 				return 0;
 			}
-			substat->word = word;
 			if (stats->next == NULL) {
 				// Create a new hashmap here
 				stats->next = sm_new(HASHMAP_CAPACITY);
@@ -151,7 +150,6 @@ typedef int(*ngram_enum_func)(char **ngram, void *obj);
 int
 tokenize_sentence(char *line, ngram_enum_func ngram_callback, void *obj) {
 	char *word;
-	char *new_word;
 	char *ngram[N];
 	unsigned int i, word_len = 0;
 
@@ -174,15 +172,15 @@ tokenize_sentence(char *line, ngram_enum_func ngram_callback, void *obj) {
 
 		// Allocate space for the new word
 		word_len = strlen(word) + 1;
-		new_word = malloc(word_len * sizeof(char));
-		if (new_word == NULL) {
-			fprintf(stderr, "Unable to copy a word\n");
-			return 0;
-		}
-		strncpy(new_word, word, word_len);
+		// new_word = malloc(word_len * sizeof(char));
+		// if (new_word == NULL) {
+			// fprintf(stderr, "Unable to copy a word\n");
+			// return 0;
+		// }
+		// strncpy(new_word, word, word_len);
 
 		// Add the current word
-		ngram[N-1] = new_word;
+		ngram[N-1] = word;
 
 		// Emit the ngram
 		if (!ngram_callback(ngram, obj)) {
@@ -201,7 +199,8 @@ tokenize_sentence(char *line, ngram_enum_func ngram_callback, void *obj) {
 			return 1;
 		}
 
-	} else for (i = N-1; i > 0; i--) {
+	//} else for (i = N-1; i > 0; i--) {
+	} else for (i = 1; i < N; i++) {
 		int j;
 
 		// Move back the previous words
@@ -244,20 +243,21 @@ gram_pick_iter(const char *word, struct gram *stats, struct word_pick *picker) {
 	// Check if we are at the desired index
 	if (picker->index_sum > picker->index_pick) {
 		// Found our word
-		picker->word = stats->word;
+		// printf("found word %s\n", word);
+		picker->word = (char *)word;
 		return 0;
 	}
 	return 1;
 }
 
 // Pick an ngram using the markov model, starting with a (n-1)-gram,
-// going in positive or negative direction
+// going in positive or negative direction. Return 1 if no ngram was found
 int
 mm_pick_ngram(struct markov_model *model, char **ngram, int direction) {
 	int i;
 	char *word;
 	struct gram *stats, *substats;
-	struct word_pick picker = {0};
+	struct word_pick picker;
 
 	stats = direction > 0 ? model->forward : model->backward;
 
@@ -266,27 +266,34 @@ mm_pick_ngram(struct markov_model *model, char **ngram, int direction) {
 		word = ngram[i];
 		if (!word) {
 			// We don't have a word here, so we need to fill it up
+			// return 0;
 			break;
 		}
 		substats = sm_get(stats->next, word);
 		if (!substats) {
 			// The model does not include this prefix.
-			// Stop here and pick the remaining words using weighted random
-			break;
+			// Abort picking
+			return 0;
 		} else {
 			ngram[i] = word;
 			stats = substats;
 		}
 	}
 
-	// Pick an index within the probability distribution, for the desired word
-	picker.index_pick = rand() % stats->value;
-	// printf("pick: %d/%d\n", picker.index_pick, stats->value);
-
 	// Walk the tree with weighted random, to finish the ngram
 	for (; i < N; i++) {
+		// memset(&picker, 0, sizeof (struct word_pick));
+
+		// Pick an index within the probability distribution, for the desired word
+		picker.index_pick = rand() % stats->value;
+		picker.index_sum = 0;
+		picker.word = NULL;
+		// printf("pick: %d/%d\n", picker.index_pick, stats->value);
+		//
 		sm_enum(stats->next, (sm_enum_func)gram_pick_iter, &picker);
+		// printf("word: %s\n", picker.word);
 		if (!picker.word) {
+			printf("no word\n");
 			return 0;
 		}
 		ngram[i] = picker.word;
@@ -320,20 +327,32 @@ mm_generate_sentence(struct markov_model *model, char **initial_ngram, char *sen
 	// printf("ngram: ");
 	// print_ngram(initial_ngram);
 	//strcpy(sentence, "hi");
+	// printf("generating\n");
 
 	// Start the ngram
 	for (i = 1; i < N; i++) {
 		ngram[i-1] = initial_ngram[i];
+		ngram_len = strlen(initial_ngram[i]);
+		strncpy(sentence_word, initial_ngram[i], ngram_len);
+		sentence_word += ngram_len + 1;
+		sentence_word[-1] = ' ';
 	}
 	ngram[N-1] = NULL;
-	
-	printf("initial ngram: ");
-	print_ngram(ngram);
 
-	while (ngram[0] && ngram[0][0]) {
+	// printf("Initial ngram: ");
+	// print_ngram(ngram);
+
+	do {
+		// If the prefix ends in a blank, don't generate a sentence with them
+		if (!ngram[N-2] || !ngram[N-2][0]) {
+			// Prefix was empty.
+			sentence_word[-1] = '\0';
+			return 0;
+		}
 
 		// Pick the next ngram
 		if (!mm_pick_ngram(model, ngram, 1)) {
+			sentence_word[-1] = '\0';
 			return 0;
 		}
 
@@ -350,17 +369,17 @@ mm_generate_sentence(struct markov_model *model, char **initial_ngram, char *sen
 			ngram[i-1] = ngram[i];
 		}
 
-	}
+	} while (ngram[N-1] && ngram[N-1][0]);
 
 	sentence_word[-1] = '\0';
-	printf("sentence: %s\n", sentence);
+	printf("Sentence: %s\n", sentence);
 
 	return 1;
 }
 
 int
 score_response(char *response) {
-	return strlen(response);
+	return response ? strlen(response) : 0;
 }
 
 // Read an ngram from an input sentence, and generate a sentence using it
@@ -369,16 +388,24 @@ mm_respond_ngram_iter(char **ngram, void *obj) {
 	struct sentence_pick *picker = obj;
 	char response[MAX_LINE_LENGTH];
 	int score;
+	int i;
+
+	// Learn the input
+	mm_learn_ngram_iter(ngram, picker->model);
+
+	// Clear the response array
+	response[0] = '\0';
+
+	printf("Got gram: ");
+	print_ngram(ngram);
 
 	// Generate a candidate response
-	if (!mm_generate_sentence(picker->model, ngram, response)) {
-		return 0;
-	}
-
-	score = score_response(response);
-	if (score > picker->best_response_score) {
-		picker->best_response_score = score;
-		strncpy(picker->best_response, response, MAX_LINE_LENGTH);
+	if (mm_generate_sentence(picker->model, ngram, response)) {
+		score = score_response(response);
+		if (score > picker->best_response_score) {
+			picker->best_response_score = score;
+			strncpy(picker->best_response, response, MAX_LINE_LENGTH);
+		}
 	}
 
 	return 1;
@@ -388,7 +415,7 @@ mm_respond_ngram_iter(char **ngram, void *obj) {
 int
 respond_and_learn(struct markov_model *model, char *line, char *response) {
 	int line_len = strlen(line);
-	char *line_copy;
+	// char *line_copy;
 	char *word;
 	struct sentence_pick picker = {
 		.model = model,
@@ -396,9 +423,9 @@ respond_and_learn(struct markov_model *model, char *line, char *response) {
 		.best_response_score = ~1
 	};
 
-	line_copy = malloc(line_len * sizeof(char));
-	if (!line_copy) return 0;
-	strncpy(line_copy, line, line_len);
+	// line_copy = malloc(line_len * sizeof(char));
+	// if (!line_copy) return 0;
+	// strncpy(line_copy, line, line_len);
 
 	// Tokenize the sentence and generate candidate responses
 	if (!tokenize_sentence(line, mm_respond_ngram_iter, &picker)) {
@@ -420,7 +447,6 @@ mm_new() {
 		free(model);
 		return NULL;
 	}
-	model->forward->word = "";
 	model->forward->next = sm_new(HASHMAP_CAPACITY);
 
 	// Create the ngram model for backward lookups
@@ -429,7 +455,6 @@ mm_new() {
 		free(model);
 		return NULL;
 	}
-	model->backward->word = "";
 	model->backward->next = sm_new(HASHMAP_CAPACITY);
 
 	return model;
@@ -454,6 +479,7 @@ main (int argc, char *argv[]) {
 	char line[MAX_LINE_LENGTH];
 	char response[MAX_LINE_LENGTH];
 	int dump_table = 0;
+	unsigned int seed = 0;
 
 	for(i = 1; i < argc; i++) {
 		c = argv[i][1];
@@ -468,6 +494,9 @@ main (int argc, char *argv[]) {
 			case 'd':
 				dump_table = 1;
 				break;
+			case 's':
+				if(++i < argc) seed = strtoul(argv[i], NULL, 10);
+				break;
 			case 'v':
 				fprintf(stderr, "chaino, © 2014 Charles Lehner\n");
 				return 1;
@@ -476,6 +505,14 @@ main (int argc, char *argv[]) {
 	if (!corpus_path || c == -1) {
 		fprintf(stderr, "Usage: chaino [-v] [-d] corpus_file\n");
 		return 1;
+	}
+
+	if (!seed) {
+		// Default to seeding with current time
+		srand(time(NULL));
+	} else if (seed != 1) {
+		// Special case: don't seed
+		srand(seed);
 	}
 
 	// Read the corpus file
@@ -520,6 +557,7 @@ main (int argc, char *argv[]) {
 			break;
 		}
 		// Respond to the message
+		response[0] = '\0';
 		if (!respond_and_learn(model, line, response)) {
 			fprintf(stderr, "Failed to respond\n");
 		} else {
