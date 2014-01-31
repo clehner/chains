@@ -44,6 +44,10 @@ gram_print_prefixed(char *word, struct gram *stats, char *prefix) {
 	if (prefix) {
 		subprefix_len = strlen(prefix) + 6 + strlen(word);
 		subprefix = malloc(subprefix_len * sizeof(char));
+		if (!subprefix) {
+			perror("malloc");
+			return 0;
+		}
 		snprintf(subprefix, subprefix_len, "    %s %s", prefix, word);
 	} else {
 		subprefix = word;
@@ -55,6 +59,10 @@ gram_print_prefixed(char *word, struct gram *stats, char *prefix) {
 		hash_each(stats->next, {
 			gram_print_prefixed((char *)key, val, subprefix);
 		});
+	}
+
+	if (prefix) {
+		free(subprefix);
 	}
 	return 1;
 }
@@ -78,7 +86,7 @@ int
 learn_ngram(struct gram *stats, char **ngram, int direction) {
 	int i;
 	struct gram *substat;
-	char *word, *new_word;
+	char *word;
 
 	// Increment total count of 1-grams
 	stats->value++;
@@ -108,13 +116,7 @@ learn_ngram(struct gram *stats, char **ngram, int direction) {
 				}
 			}
 
-			new_word = malloc(strlen(word) + 1);
-			if (!new_word) {
-				perror("strdup");
-				return 0;
-			}
-			strcpy(new_word, word);
-			hash_set(stats->next, new_word, substat);
+			hash_set(stats->next, word, substat);
 		}
 
 		// Increment the count for this i-gram
@@ -223,10 +225,18 @@ tokenize_sentence(char *line, ngram_enum_func ngram_callback, void *obj) {
 }
 
 // Learn a sentence.
-// Alters the line string argument
 int
 mm_learn_sentence(struct markov_model *model, char *line) {
-	if (!tokenize_sentence(line, mm_learn_ngram_iter, model)) {
+	unsigned int line_len = strlen(line) + 1;
+	char *line_copy = malloc(line_len * sizeof(char));
+	// Copy the line so we can safely store its words in the model
+	if (!line_copy) {
+		perror("malloc");
+		return 0;
+	}
+	strncpy(line_copy, line, line_len);
+
+	if (!tokenize_sentence(line_copy, mm_learn_ngram_iter, model)) {
 		fprintf(stderr, "Failed to learn a sentence\n");
 		return 0;
 	}
@@ -408,7 +418,7 @@ mm_respond_ngram_iter(char **ngram, void *obj) {
 int
 respond_and_learn(struct markov_model *model, char *line, char *response) {
 	int line_len = strlen(line);
-	// char *line_copy;
+	char *line_copy;
 	char *word;
 	struct sentence_pick picker = {
 		.model = model,
@@ -416,9 +426,13 @@ respond_and_learn(struct markov_model *model, char *line, char *response) {
 		.best_response_score = ~1
 	};
 
-	// line_copy = malloc(line_len * sizeof(char));
-	// if (!line_copy) return 0;
-	// strncpy(line_copy, line, line_len);
+	// Copy the line because it is going to be tokenized and stored in the model
+	line_copy = malloc(line_len * sizeof(char));
+	if (!line_copy) {
+		perror("malloc");
+		return 0;
+	}
+	strncpy(line_copy, line, line_len);
 
 	// Tokenize the sentence and generate candidate responses
 	if (!tokenize_sentence(line, mm_respond_ngram_iter, &picker)) {
