@@ -509,8 +509,10 @@ int
 respond_and_learn(struct markov_model *model, const char line[], char *best_response, char learn) {
 	unsigned int line_len = strlen(line) + 1;
 	unsigned int num_tokens;
+	int num_words;
 	char *line_copy;
 	char *words[MAX_LINE_WORDS];
+	char *initial_ngram[N];
 	char response[MAX_LINE_LENGTH];
 	int score, best_score = ~1;
 
@@ -531,56 +533,48 @@ respond_and_learn(struct markov_model *model, const char line[], char *best_resp
 		return 0;
 	}
 
+	// Ignore the sentinel padding in the sequence
+	num_words = num_tokens - 2*(N-1);
+	// words = &words[2];
+	// printf("Num words: %d\n", num_words);
 
-	// printf("Num tokens: %d\n", num_tokens);
+	// Try to generate a response based on N-grams from the input. If that does
+	// not yield anything useful, try (N-1)-grams, and so on, until we hit 0,
+	// and then just pick a random sentence not based on the input.
+	for (int m = (num_words < N ? num_words : N); m > 0; m--) {
+		// printf("m=%d\n", m);
 
-	// If the input has fewer than N words (including padding),
-	if (num_tokens < 2*N) {
-		num_tokens = 2*N;
-		// then make it into an Ngram by padding it with nulls.
-		for (int i = num_tokens-N; i < 2*N-1; i++) {
-			words[i] = NULL;
-		}
-	}
+		// Generate a candidate response for each m-gram in the input
+		for (int i = 0; i <= num_words-m; i++) {
+			// printf("i: %d, m: %d, num_words-m: %d\n", i, m, num_words-m);
 
-	// Generate a candidate response for each (n-1)-gram in the input
-	for (int i = N-1; i <= num_tokens-N-1; i++) {
-		// printf("Got gram: ");
-		// print_ngram((const char **)&words[i], N-1);
-
-		// Generate a candidate response from this ngram
-		if (mm_generate_sentence(model, (const char **)&words[i], response)) {
-			score = score_response(response);
-			// printf("Score %d: %s\n", score, response);
-			if (score > best_score) {
-				best_score = score;
-				strncpy(best_response, response, MAX_LINE_LENGTH);
+			// Copy the m-gram, with null termination
+			for (int j = 0; j < m; j++) {
+				initial_ngram[j] = words[i+j+N-1];
+				// printf("Ngram %d: %s\n", j+N-1, initial_ngram[j]);
 			}
-			printf("\n");
-		}
-	}
+			initial_ngram[m] = NULL;
 
-	if (0) {
-		fprintf(stderr, "Failed to pick ngrams");
-		return 0;
-	}
-
-	// If we didn't get a decent sentence,
-	// generate one from start sentinels
-	if (best_score <= 0) {
-		// printf("next case\n");
-		if (mm_generate_sentence(model, sentinel_sentence, best_response)) {
-			/*
-			score = score_response(best_response);
-			if (score > 0) {
-				return 1;
+			// Generate a candidate response from this ngram
+			if (mm_generate_sentence(model, (const char **)initial_ngram, response)) {
+				score = score_response(response);
+				// printf("Score %d: %s\n", score, response);
+				if (score > best_score) {
+					best_score = score;
+					strncpy(best_response, response, MAX_LINE_LENGTH);
+				}
+				// printf("\n");
 			}
-			*/
 		}
-		// return 0;
+
+		// If we get a good response, we're done.
+		if (best_score > 0) {
+			return 1;
+		}
 	}
 
-	return 1;
+	// Last resort: generate a sentence from sentinels
+	return mm_generate_sentence(model, sentinel_sentence, best_response);
 }
 
 struct markov_model*
