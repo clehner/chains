@@ -170,14 +170,7 @@ tokenize_sentence(char *line, char **words) {
 
 	// Pad the end of the sentence with empty words,
 	// to signify the end of a sentence.
-
-	// If the sentence was empty, the start and end padding collapse
-	if (i == N-1) {
-		// Add one more empty word
-		words[i++] = word_sentinel;
-
-	// Otherwise, add the end padding
-	} else for (int j = 0; j < N-1; j++) {
+	for (int j = 0; j < N-1; j++) {
 		// Add the sentinel
 		words[i++] = word_sentinel;
 	}
@@ -259,7 +252,6 @@ mm_pick_ngram(struct markov_model *model, char **ngram, unsigned int n, int dire
 	// Walk the tree with weighted random, to finish the ngram
 	for (; i < n; i++) {
 		// printf("%d\n", i);
-		// memset(&picker, 0, sizeof (struct word_pick));
 
 		// Pick an index within the probability distribution, for the desired word
 		picker_index_pick = rand() % stats->value;
@@ -423,7 +415,7 @@ respond_and_learn(struct markov_model *model, const char line[], char *best_resp
 
 	// printf("Num words: %d\n", num_words);
 
-	for (int i = 0; i <= num_words-N; i++) {
+	for (int i = 1; i <= num_words-N; i++) {
 		// printf("Got gram: ");
 		// print_ngram(ngram);
 
