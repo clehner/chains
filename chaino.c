@@ -8,7 +8,6 @@
 #define MAX_LINE_LENGTH  512
 #define MAX_LINE_WORDS 256
 #define N 3
-#define HASHMAP_CAPACITY 100
 #define DELIMETERS " \n\r\t"
 
 const char *word_sentinel = "";
@@ -358,7 +357,7 @@ mm_generate_sequence(struct markov_model *model,
 int
 mm_generate_sentence(struct markov_model *model, const char **initial_ngram, char *sentence) {
 	int word_len;
-	unsigned int seq_len;
+	unsigned int seq_len = 0;
 	char *sequence[MAX_LINE_WORDS];
 	int sentence_i = 0;
 
@@ -401,9 +400,9 @@ score_response(char *response) {
 	return response ? strlen(response) : 0;
 }
 
-// Learn a sentence, and generate a response to it.
+// Generate a response to a sentence. Optionally learn the input.
 int
-respond_and_learn(struct markov_model *model, const char line[], char *best_response) {
+respond_and_learn(struct markov_model *model, const char line[], char *best_response, char learn) {
 	unsigned int line_len = strlen(line) + 1;
 	unsigned int num_words;
 	char *line_copy;
@@ -423,7 +422,7 @@ respond_and_learn(struct markov_model *model, const char line[], char *best_resp
 	num_words = tokenize_sentence(line_copy, words);
 
 	// Learn the input sequence
-	if (!mm_learn_sequence(model, words, num_words)) {
+	if (learn && !mm_learn_sequence(model, words, num_words)) {
 		fprintf(stderr, "Failed to learn a sequence\n");
 		return 0;
 	}
@@ -501,63 +500,15 @@ mm_print(struct markov_model *model) {
 }
 
 int
-main (int argc, char *argv[]) {
-	int i;
-	char c;
-
-	struct markov_model *model;
-	char *corpus_path = NULL;
+mm_learn_file(struct markov_model *model, char *corpus_path) {
 	FILE *corpus_file;
 	char line[MAX_LINE_LENGTH];
-	char response[MAX_LINE_LENGTH];
-	int dump_table = 0;
-	unsigned int seed = 0;
-
-	for(i = 1; i < argc; i++) {
-		c = argv[i][1];
-		if(argv[i][0] != '-' || argv[i][2]) {
-			if (!corpus_path) {
-				corpus_path = argv[i];
-			} else {
-				c = -1;
-			}
-		}
-		switch(c) {
-			case 'd':
-				dump_table = 1;
-				break;
-			case 's':
-				if(++i < argc) seed = strtoul(argv[i], NULL, 10);
-				break;
-			case 'v':
-				fprintf(stderr, "chaino, © 2014 Charles Lehner\n");
-				return 1;
-		}
-	}
-	if (!corpus_path || c == -1) {
-		fprintf(stderr, "Usage: chaino [-v] [-d] corpus_file\n");
-		return 1;
-	}
-
-	if (!seed) {
-		// Default to seeding with current time
-		srand(time(NULL));
-	} else if (seed != 1) {
-		// Special case: don't seed
-		srand(seed);
-	}
 
 	// Read the corpus file
 	corpus_file = fopen(corpus_path, "r");
 	if (!corpus_file) {
 		perror("fopen");
-		return 1;
-	}
-
-	model = mm_new();
-	if (!model) {
-		fprintf(stderr, "Unable to create markov model\n");
-		return 1;
+		return 0;
 	}
 
 	// Each line of the corpus is a sentence.
@@ -574,7 +525,72 @@ main (int argc, char *argv[]) {
 			break;
 		}
 	}
+
 	fclose(corpus_file);
+	return 1;
+}
+
+int
+main (int argc, char *argv[]) {
+	int i;
+	char c;
+
+	struct markov_model *model;
+	char line[MAX_LINE_LENGTH];
+	char response[MAX_LINE_LENGTH];
+	char dump_table = 0;
+	char opt_no_learn = 0;
+	char *corpus_path = NULL;
+	unsigned int seed = 0;
+
+	for(i = 1; i < argc; i++) {
+		c = argv[i][1];
+		if(argv[i][0] != '-' || argv[i][2]) {
+			c = -1;
+		}
+		switch(c) {
+			case 'd':
+				dump_table = 1;
+				break;
+			case 's':
+				if(++i < argc) seed = strtoul(argv[i], NULL, 10);
+				break;
+			case 'n':
+				// don't learn from queries
+				opt_no_learn = 1;
+				break;
+			case 'f':
+				if(++i < argc) corpus_path = argv[i];
+				break;
+			case 'v':
+				fprintf(stderr, "chaino, © 2014 Charles Lehner\n");
+				return 1;
+			case 'h':
+			default:
+				fprintf(stderr, "Usage: chaino [-v] [-d] [-n] [-f corpus_file]\n");
+				return 1;
+		}
+	}
+
+	if (!seed) {
+		// Default to seeding with current time
+		srand(time(NULL));
+	} else if (seed != 1) {
+		// Special case: don't seed
+		srand(seed);
+	}
+
+	model = mm_new();
+	if (!model) {
+		fprintf(stderr, "Unable to create markov model\n");
+		return 1;
+	}
+
+	if (corpus_path) {
+		if (!mm_learn_file(model, corpus_path)) {
+			fprintf(stderr, "Unable to learn corpus\n");
+		}
+	}
 
 	// Print the data structure
 	if (dump_table) {
@@ -588,10 +604,10 @@ main (int argc, char *argv[]) {
 		if (!fgets(line, sizeof(line), stdin)) {
 			break;
 		}
-		// printf("Line: \"%s\"\n", line);
+
 		// Respond to the message
 		response[0] = '\0';
-		if (!respond_and_learn(model, line, response)) {
+		if (!respond_and_learn(model, line, response, !opt_no_learn)) {
 			fprintf(stderr, "Failed to respond\n");
 		} else {
 			printf("%s\n", response);
