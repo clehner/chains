@@ -1,29 +1,28 @@
 PREFIX ?= /usr/local
 BINDIR = ${PREFIX}/bin
 
-SRC = chaino.c strmap.c
-OBJ = ${SRC:.c=.o}
+BIN = chaino
 DEPS = $(wildcard deps/*/*.c)
-CFLAGS = -Ideps -std=c99
+SRC = chaino.c ${DEPS}
+OBJ = $(SRC:.c=.o)
+CFLAGS = -std=c99 -Ideps -Wall
+LDFLAGS =
 
-all: chaino
+all: $(BIN)
+
+$(BIN): $(OBJ)
+	${CC} -o $@ ${OBJ} ${LDFLAGS}
 
 .c.o:
-	${CC} -c ${CFLAGS} $<
+	${CC} -c ${CFLAGS} $< -o $@
 
-chaino: ${OBJ}
-	${CC} -o $@ ${OBJ} ${DEPS} ${LDFLAGS}
-
-install-dirs:
-	install -d ${DESTDIR}${BINDIR}
-
-install: all install-dirs
-	install -m 0755 ${NAME} ${DESTDIR}${BINDIR}
+install: all
+	install -m 0755 ${BIN} ${DESTDIR}${BINDIR}
 
 uninstall:
-	rm -f ${DESTDIR}${BINDIR}/${NAME}
+	rm -f ${DESTDIR}${BINDIR}/${BIN}
 
 clean:
-	rm -f chaino ${OBJ}
+	rm -f $(BIN)
 
-.PHONY: all install install-dirs uninstall
+.PHONY: all install uninstall
