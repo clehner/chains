@@ -354,19 +354,23 @@ mm_generate_sequence(struct markov_model *model,
 	sequence[i] = NULL;
 }
 
-// Generate a sentence using the markov model, given an initial seed ngram
-// Writes to sentence
-int
-mm_generate_sentence(struct markov_model *model, const char **initial_ngram, char *sentence) {
+// Calculate the length of all the strings in an array, with spaces between
+// them.
+size_t
+sequence_strlen(char *sequence[]) {
+	size_t len;
+	for (unsigned int i = 0; sequence[i]; i++) {
+		len += strlen(sequence[i]) + 1;
+	}
+	return len;
+}
+
+// Concatenate a sequence into a string dest, up to max_len chars.
+// Words in the sequence are seperated by spaces, and terminated with \0
+void
+sequence_concat(char *dest, char *sequence[], size_t max_len) {
 	int word_len;
-	char *sequence[MAX_LINE_WORDS];
 	int sentence_i = 0;
-
-	// printf("Initial ngram: ");
-	// print_ngram(initial_ngram, N-1);
-
-	// Generate the sequence
-	mm_generate_sequence(model, initial_ngram, N, sequence);
 
 	// Concatenate the words into a sentence
 	for (int i = 0; sequence[i]; i++) {
@@ -375,17 +379,32 @@ mm_generate_sentence(struct markov_model *model, const char **initial_ngram, cha
 			continue;
 		}
 		word_len = strlen(sequence[i]);
-		if (sentence_i + word_len + 1 > MAX_LINE_LENGTH) {
+		if (sentence_i + word_len + 1 > max_len) {
 			// Can't fit this word. End the sentence here.
 			fprintf(stderr, "A sentence was trimmed.\n");
-			sentence[sentence_i] = '\0';
-			return 1;
+			dest[sentence_i] = '\0';
+			return;
 		}
-		strncpy(&sentence[sentence_i], sequence[i], word_len);
+		strncpy(&dest[sentence_i], sequence[i], word_len);
 		sentence_i += word_len + 1;
-		sentence[sentence_i-1] = ' ';
+		dest[sentence_i-1] = ' ';
 	}
-	sentence[sentence_i ? sentence_i-1 : 0] = '\0';
+	dest[sentence_i ? sentence_i-1 : 0] = '\0';
+}
+
+// Generate a sentence using the markov model, given an initial seed ngram
+// Writes to sentence
+int
+mm_generate_sentence(struct markov_model *model, const char **initial_ngram, char *sentence) {
+	char *sequence[MAX_LINE_WORDS];
+
+	// printf("Initial ngram: ");
+	// print_ngram(initial_ngram, N-1);
+
+	// Generate the sequence
+	mm_generate_sequence(model, initial_ngram, N, sequence, 1);
+
+	sequence_concat(sentence, sequence, MAX_LINE_LENGTH);
 
 	// Generate the sentence after the seed
 	// Generate the sentence before the seed
