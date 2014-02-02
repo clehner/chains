@@ -262,7 +262,7 @@ mm_pick_ngram(struct markov_model *model, char **ngram, unsigned int n, int dire
 		if (!substats) {
 			// The model does not include this prefix.
 			// Abort picking
-			fprintf(stderr, "Model does not have this prefix\n");
+			// fprintf(stderr, "Model does not have this prefix\n");
 			return 0;
 		} else {
 			stats = substats;
@@ -301,11 +301,11 @@ mm_pick_ngram(struct markov_model *model, char **ngram, unsigned int n, int dire
 
 // Generate a response sequence from the given markov model,
 // starting from an ngram of order n.
-// Writes words to sequence, and length of the sequence to seq_len
+// Writes words to sequence
 void
 mm_generate_sequence(struct markov_model *model,
 	const char *ngram[], int n,
-	char *sequence[], unsigned int *seq_len) {
+	char *sequence[]) {
 
 	int i;
 	int sentinels_seen = 0;
@@ -323,8 +323,8 @@ mm_generate_sequence(struct markov_model *model,
 
 		num_words = mm_pick_ngram(model, &sequence[i], n, 1);
 		if (!num_words) {
-			fprintf(stderr, "Failed to pick ngram\n");
-			return;
+			// fprintf(stderr, "Failed to pick ngram\n");
+			break;
 		};
 		// printf("word %d (%d): %s\n", i, num_words, sequence[i+n-1]);
 
@@ -349,7 +349,9 @@ mm_generate_sequence(struct markov_model *model,
 	}
 	// printf("Sequence: ");
 	// print_ngram((const char **)sequence, i);
-	*seq_len = i;
+	// *seq_len = i;
+	// Mark the end of the sequence
+	sequence[i] = NULL;
 }
 
 // Generate a sentence using the markov model, given an initial seed ngram
@@ -357,7 +359,6 @@ mm_generate_sequence(struct markov_model *model,
 int
 mm_generate_sentence(struct markov_model *model, const char **initial_ngram, char *sentence) {
 	int word_len;
-	unsigned int seq_len = 0;
 	char *sequence[MAX_LINE_WORDS];
 	int sentence_i = 0;
 
@@ -365,11 +366,10 @@ mm_generate_sentence(struct markov_model *model, const char **initial_ngram, cha
 	// print_ngram(initial_ngram, N-1);
 
 	// Generate the sequence
-	mm_generate_sequence(model, initial_ngram, N, sequence, &seq_len);
-	// printf("len: %d\n", seq_len);
+	mm_generate_sequence(model, initial_ngram, N, sequence);
 
 	// Concatenate the words into a sentence
-	for (int i = 0; i < seq_len; i++) {
+	for (int i = 0; sequence[i]; i++) {
 		if (sequence[i] == word_sentinel) {
 			// Skip sentinels marking the beginning and end of the sequence
 			continue;
