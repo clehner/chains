@@ -208,10 +208,11 @@ mm_learn_sentence(struct markov_model *model, char *line) {
 }
 
 void *
-hash_pick(hash_t *hash, unsigned int index_pick) {
+gram_pick(struct gram *stats) {
 	unsigned int index_sum = 0;
+	unsigned int index_pick = rand() % stats->value;
 
-	hash_each(hash, {
+	hash_each(stats->next, {
 		// Increment the running total
 		index_sum += ((struct gram *)val)->value;
 		// Check if we are at the desired index
@@ -244,7 +245,7 @@ mm_pick_ngram(struct markov_model *model, char **ngram, unsigned int n, int dire
 		word = ngram[i];
 		if (!word) {
 			// We don't have a word here, so we need to fill it up
-			word = ngram[i] = hash_pick(stats->next, rand() % stats->value);
+			word = ngram[i] = gram_pick(stats);
 			num_words++;
 			// printf("Make it up %d: \"%s\"\n", i, word);
 		}
@@ -267,7 +268,7 @@ mm_pick_ngram(struct markov_model *model, char **ngram, unsigned int n, int dire
 		// picker_index_sum = 0;
 		// printf("pick: %d/%d\n", picker_index_pick, stats->value);
 
-		if (!(ngram[i] = (char *)hash_pick(stats->next, rand() % stats->value))) {
+		if (!(ngram[i] = (char *)gram_pick(stats))) {
 			fprintf(stderr, "Unable to pick ngram\n");
 			return 0;
 		}
