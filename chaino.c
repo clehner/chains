@@ -136,16 +136,6 @@ mm_learn_ngram(struct markov_model *model, char **ngram) {
 		learn_ngram(model->backward, ngram, -1);
 }
 
-// Learn an ngram. Passed from the tokenizer
-int
-mm_learn_ngram_iter (char **ngram, void *obj) {
-	if (!mm_learn_ngram((struct markov_model *) obj, ngram)) {
-		fprintf(stderr, "Failed to learn an n-gram\n");
-		return 0;
-	}
-	return 1;
-}
-
 // Tokenize a sentence and write the words of it to the given array.
 // Alters the line string argument.
 // Return the number of words written to the array
