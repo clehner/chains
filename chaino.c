@@ -721,6 +721,7 @@ main (int argc, char *argv[]) {
 			fprintf(stderr, "Failed to respond\n");
 		} else {
 			printf("%s\n", response);
+			fflush(stdout);
 		}
 	}
 }
