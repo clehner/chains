@@ -13,7 +13,7 @@ main (int argc, char *argv[]) {
 	char line[MAX_LINE_LENGTH];
 	char response[MAX_LINE_LENGTH];
 	char dump_table = 0;
-	char opt_no_learn = 0;
+	char opt_learn = 0;
 	char *corpus_path = NULL;
 	unsigned int seed = 0;
 
@@ -29,9 +29,9 @@ main (int argc, char *argv[]) {
 			case 's':
 				if(++i < argc) seed = strtoul(argv[i], NULL, 10);
 				break;
-			case 'n':
-				// don't learn from queries
-				opt_no_learn = 1;
+			case 'l':
+				// learn from queries
+				opt_learn = 1;
 				break;
 			case 'f':
 				if(++i < argc) corpus_path = argv[i];
@@ -81,7 +81,7 @@ main (int argc, char *argv[]) {
 
 		// Respond to the message
 		response[0] = '\0';
-		if (!mm_respond_and_learn(model, line, response, !opt_no_learn)) {
+		if (!mm_respond_and_learn(model, line, response, opt_learn)) {
 			fprintf(stderr, "Failed to respond\n");
 		} else {
 			printf("%s\n", response);
