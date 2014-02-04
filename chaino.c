@@ -78,7 +78,6 @@ print_ngram(const char *ngram[], int n) {
 	int i;
 	for (i = 0; i < n; i++) {
 		printf("\"%s\"%s", ngram[i], i < n-1 ? " " : "\n");
-		//printf("%s%s", ngram[i], i < N-1 ? " " : "\n");
 	}
 }
 
@@ -167,8 +166,6 @@ tokenize_sentence(char *line, char **words) {
 
 	return i;
 }
-
-// typedef int(*ngram_enum_func)(char **ngram, void *obj);
 
 // Learn a sequence of n words
 int
@@ -273,18 +270,6 @@ mm_pick_ngram(struct markov_model *model, char **ngram, unsigned int n, int dire
 			return 0;
 		}
 		num_words++;
-		// printf("Picked %d: %s\n", i, ngram[i]);
-
-		// todo: all returning multiple words
-		// printf("No word\n");
-		// return 0;
-
-		// printf("word: %s\n", picker.word);
-		// if (!picker_word) {
-			// printf("no word\n");
-			// return 0;
-		// }
-		// printf("Got %s\n", picker.word);
 	}
 
 	return num_words;
@@ -335,8 +320,6 @@ mm_generate_sequence(struct markov_model *model, int n,
 	// printf("Sequence: ");
 	// print_ngram((const char **)sequence, i);
 	*seq_len = i;
-	// Mark the end of the sequence
-	// sequence[i] = NULL;
 }
 
 // Calculate the length of all the strings in an array, with spaces between
@@ -371,8 +354,6 @@ sequence_concat(char *dest, char *sequence[], unsigned int max_len,
 	int word_len;
 	int sentence_i = 0;
 
-	// printf("dest: \"%s\", seq[0]: \"%s\", seq_len: %d\n", dest, sequence[0], seq_len);
-
 	// Concatenate the words into a sentence
 	for (int i = 0; i < seq_len; i++) {
 		char *word = sequence[i * direction];
@@ -388,7 +369,6 @@ sequence_concat(char *dest, char *sequence[], unsigned int max_len,
 			dest[sentence_i] = '\0';
 			return;
 		}
-		// printf("Copy %d: %s\n", word_len, word);
 		strncpy(&dest[sentence_i], word, word_len);
 		sentence_i += word_len + 1;
 		dest[sentence_i-1] = ' ';
@@ -482,7 +462,6 @@ mm_generate_sentence(struct markov_model *model, const char **initial_ngram, cha
 	}
 
 	if (!generate_forward && !generate_backward) {
-		//sentence[0] = '\0';
 		return 0;
 	}
 
