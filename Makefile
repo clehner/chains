@@ -1,9 +1,9 @@
 PREFIX ?= /usr/local
 BINDIR = ${PREFIX}/bin
 
-BIN = chaino
-DEPS = $(wildcard deps/*/*.c)
-SRC = chaino.c ${DEPS}
+BIN = chains
+SRC = $(wildcard *.c)
+SRC += $(wildcard deps/*/*.c)
 OBJ = $(SRC:.c=.o)
 CFLAGS = -std=c99 -Ideps -Wall
 LDFLAGS =
@@ -23,6 +23,6 @@ uninstall:
 	rm -f ${DESTDIR}${BINDIR}/${BIN}
 
 clean:
-	rm -f $(BIN)
+	rm -f $(BIN) $(OBJ)
 
 .PHONY: all install uninstall

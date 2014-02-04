@@ -1,12 +1,12 @@
 {
-	"name": "chaino",
-	"version": "0.0.1",
-	"repo": "clehner/chaino",
+	"name": "chains",
+	"version": "0.1.0",
+	"repo": "clehner/chains",
 	"description": "Markov chains",
 	"keywords": ["markov", "chains"],
 	"license": "MIT",
 	"dependencies": {
 		"clibs/hash": "*"
 	},
-	"src": ["chaino.c"]
+	"src": ["chains.c", "chains.h"]
 }
