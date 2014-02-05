@@ -70,6 +70,7 @@ main (int argc, char *argv[]) {
 	// Respond to queries
 	while (!feof(stdin)) {
 		// Receive a message
+		printf("> ");
 		if (!fgets(line, sizeof(line), stdin)) {
 			break;
 		}
@@ -83,5 +84,6 @@ main (int argc, char *argv[]) {
 			fflush(stdout);
 		}
 	}
+	puts("");
 }
 
