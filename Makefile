@@ -2,7 +2,7 @@ PREFIX ?= /usr/local
 BINDIR = ${PREFIX}/bin
 
 BIN = chains
-SRC = $(wildcard *.c)
+SRC = $(wildcard src/*.c)
 SRC += $(wildcard deps/*/*.c)
 OBJ = $(SRC:.c=.o)
 CFLAGS = -std=c99 -Ideps -Wall
