@@ -38,9 +38,9 @@ int
 mm_pick_ngram(struct markov_model *model, char **ngram,
 	unsigned int n, int direction);
 
-void
+int
 mm_generate_sequence(struct markov_model *model, int n,
-	char *sequence[], int *seq_len, int direction);
+	char *sequence[], int direction);
 
 int
 mm_generate_sentence(struct markov_model *model,

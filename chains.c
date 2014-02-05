@@ -274,9 +274,9 @@ mm_pick_ngram(struct markov_model *model, char **ngram, unsigned int n, int dire
 // Generate a response sequence from the given markov model,
 // starting from the ngram given in sequence
 // Writes words to sequence, and the length of the sequence to seq_len.
-void
+int
 mm_generate_sequence(struct markov_model *model, int n,
-	char *sequence[], int *seq_len, int direction) {
+	char *sequence[], int direction) {
 
 	int i;
 	int sentinels_seen = 0;
@@ -315,7 +315,7 @@ mm_generate_sequence(struct markov_model *model, int n,
 	}
 	// printf("Sequence: ");
 	// print_ngram((const char **)sequence, i);
-	*seq_len = i;
+	return i;
 }
 
 // Calculate the length of all the strings in an array, with spaces between
@@ -409,7 +409,7 @@ mm_generate_sentence(struct markov_model *model, const char **initial_ngram, cha
 		}
 
 		// Generate a sequence from the initial ngram to a sentence end
-		mm_generate_sequence(model, N, seq_forward, &seq_forward_len, 1);
+		seq_forward_len = mm_generate_sequence(model, N, seq_forward, 1);
 
 		// printf("Forward sequence (%d): ", seq_forward_len);
 		// sequence_print(seq_forward, seq_forward_len);
@@ -429,7 +429,7 @@ mm_generate_sentence(struct markov_model *model, const char **initial_ngram, cha
 		}
 
 		// Generate a reverse sequence from the initial ngram to a sentence start
-		mm_generate_sequence(model, N, seq_backward, &seq_backward_len, -1);
+		seq_backward_len = mm_generate_sequence(model, N, seq_backward, -1);
 		seq_backward_strlen = sequence_strlen(seq_backward, seq_backward_len);
 
 		// printf("Reverse sequence (%d, %d): ", seq_backward_len, seq_backward_strlen);
