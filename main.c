@@ -14,8 +14,13 @@ main (int argc, char *argv[]) {
 	char response[MAX_LINE_LENGTH];
 	char dump_table = 0;
 	char opt_learn = 0;
-	char *corpus_path = NULL;
 	unsigned int seed = 0;
+
+	model = mm_new();
+	if (!model) {
+		fprintf(stderr, "Unable to create markov model\n");
+		return 1;
+	}
 
 	for(i = 1; i < argc; i++) {
 		c = argv[i][1];
@@ -34,14 +39,16 @@ main (int argc, char *argv[]) {
 				opt_learn = 1;
 				break;
 			case 'f':
-				if(++i < argc) corpus_path = argv[i];
+				if(++i < argc && !mm_learn_file(model, argv[i])) {
+					fprintf(stderr, "Unable to learn corpus\n");
+				}
 				break;
 			case 'v':
 				fprintf(stderr, "chains, © 2014 Charles Lehner\n");
 				return 1;
 			case 'h':
 			default:
-				fprintf(stderr, "Usage: chains [-v] [-d] [-n] [-f corpus_file]\n");
+				fprintf(stderr, "Usage: chains [-h] [-v] [-s seed] [-d] [-l] [-f corpus_file]\n");
 				return 1;
 		}
 	}
@@ -52,18 +59,6 @@ main (int argc, char *argv[]) {
 	} else if (seed != 1) {
 		// Special case: don't seed
 		srand(seed);
-	}
-
-	model = mm_new();
-	if (!model) {
-		fprintf(stderr, "Unable to create markov model\n");
-		return 1;
-	}
-
-	if (corpus_path) {
-		if (!mm_learn_file(model, corpus_path)) {
-			fprintf(stderr, "Unable to learn corpus\n");
-		}
 	}
 
 	// Print the data structure
