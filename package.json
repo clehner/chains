@@ -8,5 +8,5 @@
 	"dependencies": {
 		"clibs/hash": "*"
 	},
-	"src": ["chains.c", "chains.h"]
+	"src": ["src/chains.c", "src/chains.h"]
 }
