@@ -35,8 +35,7 @@ mm_learn_file(struct markov_model *model, char *corpus_path);
 // generating
 
 int
-mm_pick_ngram(struct markov_model *model, char **ngram,
-	unsigned int n, int direction);
+mm_pick_ngram(struct markov_model *model, char **ngram, int n, int direction);
 
 int
 mm_generate_sequence(struct markov_model *model, int n,

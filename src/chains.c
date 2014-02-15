@@ -167,7 +167,7 @@ tokenize_sentence(char *line, char **words) {
 int
 mm_learn_sequence(struct markov_model *model, char *words[], unsigned int len) {
 	// Learn each ngram in the sequence
-	for (int i = 0; i <= len - N; i++) {
+	for (unsigned int i = 0; i <= len - N; i++) {
 		if (!mm_learn_ngram(model, &words[i])) return 0;
 	}
 	return 1;
@@ -225,7 +225,7 @@ gram_pick(struct gram *stats) {
 // Write the word to the n-th place in ngram.
 // Returns the number of words written (up to n).
 int
-mm_pick_ngram(struct markov_model *model, char **ngram, unsigned int n, int direction) {
+mm_pick_ngram(struct markov_model *model, char **ngram, int n, int direction) {
 	int i;
 	int num_words = 0;
 	const char *word;
@@ -323,7 +323,7 @@ mm_generate_sequence(struct markov_model *model, int n,
 size_t
 sequence_strlen(char *sequence[], int seq_len) {
 	size_t len = 0;
-	for (unsigned int i = 0; i < seq_len; i++) {
+	for (int i = 0; i < seq_len; i++) {
 		if (sequence[i] != word_sentinel) {
 			len += strlen(sequence[i]) + 1;
 		}
@@ -333,7 +333,7 @@ sequence_strlen(char *sequence[], int seq_len) {
 
 void
 sequence_print(char *sequence[], int len) {
-	for (unsigned int i = 0; i < len; i++) {
+	for (int i = 0; i < len; i++) {
 		if (sequence[i] != word_sentinel) {
 			printf("\"%s\" ", sequence[i]);
 		}
@@ -345,8 +345,8 @@ sequence_print(char *sequence[], int len) {
 // Words in the sequence are seperated by spaces, and terminated with \0
 // Direction can be 1 for forward or -1 for reverse.
 void
-sequence_concat(char *dest, char *sequence[], unsigned int max_len,
-		unsigned int seq_len, int direction) {
+sequence_concat(char *dest, char *sequence[], int max_len,
+		int seq_len, int direction) {
 	int word_len;
 	int sentence_i = 0;
 
