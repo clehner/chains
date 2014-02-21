@@ -1,0 +1,644 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>/usr/local/src/chains/src/chains.c.html</title>
+<meta name="Generator" content="Vim/7.4">
+<meta name="plugin-version" content="vim7.4_v1">
+<meta name="syntax" content="c">
+<meta name="settings" content="use_css,pre_wrap,no_foldcolumn,expand_tabs,prevent_copy=">
+<meta name="colorscheme" content="github">
+<style type="text/css">
+<!--
+pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
+body { font-family: monospace; color: #000000; background-color: #ffffff; }
+* { font-size: 1em; }
+.Constant { color: #c00000; }
+.Statement { color: #af5f00; }
+.PreProc { color: #c000c0; }
+.Type { color: #008000; }
+.Special { color: #c000c0; }
+.Comment { color: #0000c0; }
+.Error { color: #ffffff; background-color: #ff6060; padding-bottom: 1px; }
+-->
+</style>
+
+<script type='text/javascript'>
+<!--
+
+-->
+</script>
+</head>
+<body>
+<pre id='vimCodeElement'>
+<span class="PreProc">#include </span>&lt;stdio.h&gt;
+<span class="PreProc">#include </span>&lt;stdlib.h&gt;
+<span class="PreProc">#include </span>&lt;string.h&gt;
+<span class="PreProc">#include </span>&lt;errno.h&gt;
+<span class="PreProc">#include </span>&lt;time.h&gt;
+<span class="PreProc">#include </span>&quot;hash/hash.h&quot;
+<span class="PreProc">#include </span>&quot;chains.h&quot;
+
+const <span class="Type">char</span> *word_sentinel = &quot;&quot;;
+const <span class="Type">char</span> *sentinel_sentence[] = {&quot;&quot;, <span class="Constant">NULL</span>};
+
+struct gram {
+    <span class="Type">int</span> value;
+    hash_t *next; <span class="Comment">// map words to gram structs</span>
+};
+
+struct markov_model {
+    struct gram *forward;
+    struct gram *backward;
+};
+
+struct gram *
+gram_new() {
+    struct gram *stats = malloc(<span class="Statement">sizeof</span> (struct gram));
+    <span class="Statement">if</span> (!stats) {
+        perror(&quot;malloc&quot;);
+        <span class="Statement">return</span> <span class="Constant">NULL</span>;
+    }
+    memset(stats, 0, <span class="Statement">sizeof</span> (struct gram));
+    <span class="Statement">return</span> stats;
+}
+
+<span class="Comment">// Print the whole data structure</span>
+<span class="Type">int</span>
+gram_print_prefixed(<span class="Type">char</span> *word, struct gram *stats, <span class="Type">char</span> *prefix) {
+    <span class="Type">char</span> *subprefix;
+    <span class="Type">int</span> subprefix_len;
+
+    <span class="Comment">// Concat the parent words prefix with the current word</span>
+    <span class="Statement">if</span> (prefix) {
+        subprefix_len = strlen(prefix) + 6 + strlen(word);
+        subprefix = malloc(subprefix_len * <span class="Statement">sizeof</span>(<span class="Type">char</span>));
+        <span class="Statement">if</span> (!subprefix) {
+            perror(&quot;malloc&quot;);
+            <span class="Statement">return</span> 0;
+        }
+        snprintf(subprefix, subprefix_len, &quot;    <span class="Special">%s</span> <span class="Special">%s</span>&quot;, prefix, word);
+    } <span class="Statement">else</span> {
+        subprefix = word;
+    }
+
+    printf(&quot;<span class="Special">%s</span> (<span class="Special">%d</span>)<span class="Special">\n</span>&quot;, subprefix, stats-&gt;value);
+
+    <span class="Statement">if</span> (stats-&gt;next) {
+        hash_each(stats-&gt;next, <span class="Error">{</span>
+            gram_print_prefixed((<span class="Type">char</span> *)key, val, subprefix);
+        <span class="Error">}</span>);
+    }
+
+    <span class="Statement">if</span> (prefix) {
+        free(subprefix);
+    }
+    <span class="Statement">return</span> 1;
+}
+
+<span class="Comment">// Print the whole data structure</span>
+<span class="Type">void</span>
+gram_print(struct gram *stats) {
+    gram_print_prefixed(&quot;&quot;, stats, <span class="Constant">NULL</span>);
+}
+
+<span class="Type">void</span>
+print_ngram(const <span class="Type">char</span> *ngram[], <span class="Type">int</span> n) {
+    <span class="Type">int</span> i;
+    <span class="Statement">for</span> (i = 0; i &lt; n; i++) {
+        printf(&quot;<span class="Special">\&quot;</span><span class="Special">%s</span><span class="Special">\&quot;</span><span class="Special">%s</span>&quot;, ngram[i], i &lt; n-1 ? &quot; &quot; : &quot;<span class="Special">\n</span>&quot;);
+    }
+}
+
+<span class="Type">int</span>
+learn_ngram(struct gram *stats, <span class="Type">char</span> **ngram, <span class="Type">int</span> direction) {
+    <span class="Type">int</span> i;
+    struct gram *substat;
+    <span class="Type">char</span> *word;
+
+    <span class="Comment">// Increment total count of 1-grams</span>
+    stats-&gt;value++;
+
+    <span class="Comment">// Add the 1-gram, then the 2-gram, etc, up to N</span>
+    <span class="Statement">for</span> (i = 0; i &lt; N; i++) {
+
+        <span class="Comment">// Select the word depending on the direction</span>
+        word = ngram[direction &gt; 0 ? i : N - i - 1];
+
+        <span class="Comment">// Lookup by the next word</span>
+        substat = stats-&gt;next ? hash_get(stats-&gt;next, word) : <span class="Constant">NULL</span>;
+
+        <span class="Comment">// If the tree does not reach this word, add a new node</span>
+        <span class="Statement">if</span> (!substat) {
+
+            substat = gram_new();
+            <span class="Statement">if</span> (!substat) {
+                fprintf(<span class="Constant">stderr</span>, &quot;Failed to create a gram<span class="Special">\n</span>&quot;);
+                <span class="Statement">return</span> 0;
+            }
+            <span class="Statement">if</span> (stats-&gt;next == <span class="Constant">NULL</span>) {
+                <span class="Comment">// Create a new hashmap here</span>
+                stats-&gt;next = hash_new();
+                <span class="Statement">if</span> (!stats-&gt;next) {
+                    <span class="Statement">return</span> 0;
+                }
+            }
+
+            hash_set(stats-&gt;next, word, substat);
+        }
+
+        <span class="Comment">// Increment the count for this i-gram</span>
+        substat-&gt;value++;
+
+        <span class="Comment">// Proceed to the next word-level</span>
+        stats = substat;
+    }
+
+    <span class="Statement">return</span> 1;
+}
+
+<span class="Type">int</span>
+mm_learn_ngram(struct markov_model *model, <span class="Type">char</span> **ngram) {
+    <span class="Statement">return</span>
+        learn_ngram(model-&gt;forward, ngram, 1) &amp;&amp;
+        learn_ngram(model-&gt;backward, ngram, -1);
+}
+
+<span class="Comment">// Tokenize a sentence and write the words of it to the given array.</span>
+<span class="Comment">// Alters the line string argument.</span>
+<span class="Comment">// Return the number of words written to the array</span>
+<span class="Type">unsigned</span> <span class="Type">int</span>
+tokenize_sentence(<span class="Type">char</span> *line, <span class="Type">char</span> **words) {
+    <span class="Type">char</span> *word;
+    <span class="Type">unsigned</span> <span class="Type">int</span> i;
+
+    <span class="Statement">if</span> (!line) <span class="Statement">return</span> 0;
+
+    <span class="Comment">// Start with N-1 empty words,</span>
+    <span class="Comment">// to signify the beginning of a sentence</span>
+    <span class="Statement">for</span> (i = 0; i &lt; N-1; i++) {
+        words[i] = (<span class="Type">char</span> *)word_sentinel;
+    }
+
+    <span class="Comment">// Split the sentence into words</span>
+    <span class="Statement">for</span> (word = strtok(line, DELIMETERS); word; word = strtok(<span class="Constant">NULL</span>, DELIMETERS)) {
+        <span class="Comment">// Add the current word</span>
+        words[i++] = word;
+    }
+
+    <span class="Comment">// Pad the end of the sentence with empty words,</span>
+    <span class="Comment">// to signify the end of a sentence.</span>
+    <span class="Statement">for</span> (<span class="Type">int</span> j = 0; j &lt; N-1; j++) {
+        <span class="Comment">// Add the sentinel</span>
+        words[i++] = (<span class="Type">char</span> *)word_sentinel;
+    }
+
+    <span class="Statement">return</span> i;
+}
+
+<span class="Comment">// Learn a sequence of n words</span>
+<span class="Type">int</span>
+mm_learn_sequence(struct markov_model *model, <span class="Type">char</span> *words[], <span class="Type">unsigned</span> <span class="Type">int</span> len) {
+    <span class="Comment">// Learn each ngram in the sequence</span>
+    <span class="Statement">for</span> (<span class="Type">unsigned</span> <span class="Type">int</span> i = 0; i &lt;= len - N; i++) {
+        <span class="Statement">if</span> (!mm_learn_ngram(model, &amp;words[i])) <span class="Statement">return</span> 0;
+    }
+    <span class="Statement">return</span> 1;
+}
+
+<span class="Comment">// Learn a sentence.</span>
+<span class="Type">int</span>
+mm_learn_sentence(struct markov_model *model, <span class="Type">char</span> *line) {
+    <span class="Type">char</span> *words[MAX_LINE_WORDS];
+    <span class="Type">unsigned</span> <span class="Type">int</span> num_words;
+
+    <span class="Comment">// Copy the line so we can safely store its words in the model</span>
+    <span class="Type">unsigned</span> <span class="Type">int</span> line_len = strlen(line) + 1;
+    <span class="Type">char</span> *line_copy = malloc(line_len * <span class="Statement">sizeof</span>(<span class="Type">char</span>));
+    <span class="Statement">if</span> (!line_copy) {
+        perror(&quot;malloc&quot;);
+        <span class="Statement">return</span> 0;
+    }
+    strncpy(line_copy, line, line_len);
+
+    <span class="Comment">// Split the sentence into words</span>
+    num_words = tokenize_sentence(line_copy, words);
+
+    <span class="Comment">// Learn the sequence of words</span>
+    <span class="Statement">if</span> (!mm_learn_sequence(model, words, num_words)) {
+        fprintf(<span class="Constant">stderr</span>, &quot;Failed to learn a sentence<span class="Special">\n</span>&quot;);
+        <span class="Statement">return</span> 0;
+    }
+
+    <span class="Statement">return</span> 1;
+}
+
+<span class="Type">void</span> *
+gram_pick(struct gram *stats) {
+    <span class="Type">unsigned</span> <span class="Type">int</span> index_sum = 0;
+    <span class="Type">unsigned</span> <span class="Type">int</span> index_pick = rand() % stats-&gt;value;
+
+    hash_each(stats-&gt;next, <span class="Error">{</span>
+        <span class="Comment">// Increment the running total</span>
+        index_sum += ((struct gram *)val)-&gt;value;
+        <span class="Comment">// Check if we are at the desired index</span>
+        <span class="Statement">if</span> (index_sum &gt; index_pick) <span class="Error">{</span>
+            <span class="Comment">// Found our word</span>
+            <span class="Comment">// printf(&quot;found word %s\n&quot;, word);</span>
+            <span class="Statement">return</span> (<span class="Type">char</span> *)key;
+        <span class="Error">}</span>
+    }<span class="Error">)</span>;
+
+    <span class="Statement">return</span> <span class="Constant">NULL</span>;
+}
+
+<span class="Comment">// Pick a word using the markov model of order n,</span>
+<span class="Comment">// starting from a (n-1)-gram,</span>
+<span class="Comment">// going in positive or negative direction.</span>
+<span class="Comment">// Write the word to the n-th place in ngram.</span>
+<span class="Comment">// Returns the number of words written (up to n).</span>
+<span class="Type">int</span>
+mm_pick_ngram(struct markov_model *model, <span class="Type">char</span> **ngram, <span class="Type">int</span> n, <span class="Type">int</span> direction) {
+    <span class="Type">int</span> i;
+    <span class="Type">int</span> num_words = 0;
+    const <span class="Type">char</span> *word;
+    struct gram *stats, *substats;
+
+    stats = direction &gt; 0 ? model-&gt;forward : model-&gt;backward;
+
+    <span class="Comment">// Walk the tree to get to the distribution for this prefix</span>
+    <span class="Statement">for</span> (i = 0; i &lt; n-1; i++) {
+        word = ngram[i];
+        <span class="Statement">if</span> (!word) {
+            <span class="Comment">// We don't have a word here, so we need to fill it up</span>
+            word = ngram[i] = gram_pick(stats);
+            num_words++;
+            <span class="Comment">// printf(&quot;Make it up %d: \&quot;%s\&quot;\n&quot;, i, word);</span>
+        }
+        substats = hash_get(stats-&gt;next, (<span class="Type">char</span> *)word);
+        <span class="Statement">if</span> (!substats) {
+            <span class="Comment">// The model does not include this prefix.</span>
+            <span class="Comment">// Abort picking</span>
+            <span class="Comment">// fprintf(stderr, &quot;Model does not have this prefix\n&quot;);</span>
+            <span class="Statement">return</span> 0;
+        } <span class="Statement">else</span> {
+            stats = substats;
+        }
+    }
+
+    <span class="Comment">// Walk the tree with weighted random, to finish the ngram</span>
+    <span class="Statement">for</span> (; i &lt; n; i++) {
+        <span class="Comment">// printf(&quot;%d\n&quot;, i);</span>
+
+        <span class="Comment">// Pick an index within the probability distribution, for the desired word</span>
+        <span class="Comment">// picker_index_sum = 0;</span>
+        <span class="Comment">// printf(&quot;pick: %d/%d\n&quot;, picker_index_pick, stats-&gt;value);</span>
+
+        <span class="Statement">if</span> (!(ngram[i] = (<span class="Type">char</span> *)gram_pick(stats))) {
+            fprintf(<span class="Constant">stderr</span>, &quot;Unable to pick ngram<span class="Special">\n</span>&quot;);
+            <span class="Statement">return</span> 0;
+        }
+        num_words++;
+    }
+
+    <span class="Statement">return</span> num_words;
+}
+
+<span class="Comment">// Generate a response sequence from the given markov model,</span>
+<span class="Comment">// starting from the ngram given in sequence</span>
+<span class="Comment">// Writes words to sequence, and the length of the sequence to seq_len.</span>
+<span class="Type">int</span>
+mm_generate_sequence(struct markov_model *model, <span class="Type">int</span> n,
+    <span class="Type">char</span> *sequence[], <span class="Type">int</span> direction) {
+
+    <span class="Type">int</span> i;
+    <span class="Type">int</span> sentinels_seen = 0;
+    <span class="Type">int</span> num_words;
+
+    <span class="Statement">for</span> (i = 0; i &lt; MAX_LINE_WORDS - n; i++) {
+
+        <span class="Comment">// printf(&quot;Prefix: &quot;);</span>
+        <span class="Comment">// print_ngram((const char **)&amp;sequence[i], n-1);</span>
+
+        num_words = mm_pick_ngram(model, &amp;sequence[i], n, direction);
+        <span class="Statement">if</span> (!num_words) {
+            <span class="Comment">// fprintf(stderr, &quot;Failed to pick ngram\n&quot;);</span>
+            <span class="Statement">break</span>;
+        };
+        <span class="Comment">// printf(&quot;word %d (%d): %s\n&quot;, i, num_words, sequence[i+n-1]);</span>
+
+        <span class="Comment">// Keep track of how many consecutive sentinels we have seen</span>
+        <span class="Statement">if</span> (sequence[i+num_words] == word_sentinel) {
+            sentinels_seen++;
+            <span class="Statement">if</span> (sentinels_seen &gt;= n-2) {
+                <span class="Comment">// We've reached a sentence end</span>
+                <span class="Comment">// printf(&quot;end\n&quot;);</span>
+                i += n;
+                <span class="Statement">break</span>;
+            }
+        } <span class="Statement">else</span> {
+            sentinels_seen = 0;
+        }
+    }
+    <span class="Statement">if</span> (i &gt;= MAX_LINE_WORDS) {
+        i = MAX_LINE_WORDS;
+        fprintf(<span class="Constant">stderr</span>, &quot;A sequence was trimmed.<span class="Special">\n</span>&quot;);
+    } <span class="Statement">else</span> {
+        <span class="Comment">// printf(&quot;Sequence end.\n&quot;);</span>
+    }
+    <span class="Comment">// printf(&quot;Sequence: &quot;);</span>
+    <span class="Comment">// print_ngram((const char **)sequence, i);</span>
+    <span class="Statement">return</span> i;
+}
+
+<span class="Comment">// Calculate the length of all the strings in an array, with spaces between</span>
+<span class="Comment">// them.</span>
+<span class="Type">size_t</span>
+sequence_strlen(<span class="Type">char</span> *sequence[], <span class="Type">int</span> seq_len) {
+    <span class="Type">size_t</span> len = 0;
+    <span class="Statement">for</span> (<span class="Type">int</span> i = 0; i &lt; seq_len; i++) {
+        <span class="Statement">if</span> (sequence[i] != word_sentinel) {
+            len += strlen(sequence[i]) + 1;
+        }
+    }
+    <span class="Statement">return</span> len;
+}
+
+<span class="Type">void</span>
+sequence_print(<span class="Type">char</span> *sequence[], <span class="Type">int</span> len) {
+    <span class="Statement">for</span> (<span class="Type">int</span> i = 0; i &lt; len; i++) {
+        <span class="Statement">if</span> (sequence[i] != word_sentinel) {
+            printf(&quot;<span class="Special">\&quot;</span><span class="Special">%s</span><span class="Special">\&quot;</span> &quot;, sequence[i]);
+        }
+    }
+    printf(&quot;<span class="Special">\n</span>&quot;);
+}
+
+<span class="Comment">// Concatenate a sequence into a string dest, up to max_len chars.</span>
+<span class="Comment">// Words in the sequence are seperated by spaces, and terminated with \0</span>
+<span class="Comment">// Direction can be 1 for forward or -1 for reverse.</span>
+<span class="Type">void</span>
+sequence_concat(<span class="Type">char</span> *dest, <span class="Type">char</span> *sequence[], <span class="Type">unsigned</span> <span class="Type">int</span> max_len,
+        <span class="Type">unsigned</span> <span class="Type">int</span> seq_len, <span class="Type">int</span> direction) {
+    <span class="Type">int</span> word_len;
+    <span class="Type">int</span> sentence_i = 0;
+
+    <span class="Comment">// Concatenate the words into a sentence</span>
+    <span class="Statement">for</span> (<span class="Type">int</span> i = 0; i &lt; seq_len; i++) {
+        <span class="Type">char</span> *word = sequence[i * direction];
+        <span class="Comment">// printf(&quot;Word %d: \&quot;%s\&quot;\n&quot;, i*direction, word);</span>
+        <span class="Statement">if</span> (word == word_sentinel) {
+            <span class="Comment">// Skip sentinels marking the beginning and end of the sequence</span>
+            <span class="Statement">continue</span>;
+        }
+        word_len = strlen(word);
+        <span class="Statement">if</span> (sentence_i + word_len + 1 &gt; max_len) {
+            <span class="Comment">// Can't fit this word. End the sentence here.</span>
+            fprintf(<span class="Constant">stderr</span>, &quot;A sentence was trimmed.<span class="Special">\n</span>&quot;);
+            dest[sentence_i] = <span class="Special">'\0'</span>;
+            <span class="Statement">return</span>;
+        }
+        strncpy(&amp;dest[sentence_i], word, word_len);
+        sentence_i += word_len + 1;
+        dest[sentence_i-1] = ' ';
+    }
+    dest[sentence_i ? sentence_i-1 : 0] = <span class="Special">'\0'</span>;
+}
+
+<span class="Comment">// Generate a sentence using the markov model, given an initial seed ngram</span>
+<span class="Comment">// Writes to sentence</span>
+<span class="Type">int</span>
+mm_generate_sentence(struct markov_model *model, const <span class="Type">char</span> **initial_ngram, <span class="Type">char</span> *sentence) {
+    <span class="Type">char</span> *seq_forward[MAX_LINE_WORDS];
+    <span class="Type">char</span> *seq_backward[MAX_LINE_WORDS];
+    <span class="Type">int</span> seq_skip = 0;
+    <span class="Type">int</span> seq_forward_len;
+    <span class="Type">int</span> seq_backward_len;
+    <span class="Type">unsigned</span> <span class="Type">int</span> seq_backward_strlen;
+    <span class="Type">char</span> generate_forward = 1;
+    <span class="Type">char</span> generate_backward = 1;
+    <span class="Type">int</span> i;
+
+    sentence[0] = <span class="Special">'\0'</span>;
+
+    <span class="Comment">// printf(&quot;Initial ngram: &quot;);</span>
+    <span class="Comment">// print_ngram(initial_ngram, N-1);</span>
+
+    <span class="Comment">// If the initial ngram ends with a sentinel, only generate a back-sequence</span>
+    <span class="Statement">if</span> (initial_ngram[N-2] == word_sentinel) {
+        generate_forward = 0;
+    }
+
+    <span class="Comment">// If the intial ngram starts with a sentinel, only generate a forward sequence.</span>
+    <span class="Statement">if</span> (initial_ngram[0] == word_sentinel) {
+        generate_backward = 0;
+    }
+
+    <span class="Statement">if</span> (generate_forward) {
+
+        <span class="Comment">// Start with the (n-1)-gram prefix</span>
+        <span class="Statement">for</span> (i = 0; i &lt; N-1; i++) {
+            seq_forward[i] = (<span class="Type">char</span> *)initial_ngram[i];
+        }
+
+        <span class="Comment">// Generate a sequence from the initial ngram to a sentence end</span>
+        seq_forward_len = mm_generate_sequence(model, N, seq_forward, 1);
+
+        <span class="Comment">// printf(&quot;Forward sequence (%d): &quot;, seq_forward_len);</span>
+        <span class="Comment">// sequence_print(seq_forward, seq_forward_len);</span>
+    }
+
+    <span class="Statement">if</span> (generate_backward) {
+
+        <span class="Comment">// Start with the (n-1)-gram prefix, reversed</span>
+        <span class="Comment">// or start with the initial ngram in the forward sequence, because it</span>
+        <span class="Comment">// may have been extended</span>
+        <span class="Statement">for</span> (i = 0; i &lt; N-1; i++) {
+            seq_backward[i] =
+                (generate_forward &amp;&amp; seq_forward_len ?
+                    seq_forward :
+                    (<span class="Type">char</span> **)initial_ngram
+                )[N-i-2];
+        }
+
+        <span class="Comment">// Generate a reverse sequence from the initial ngram to a sentence start</span>
+        seq_backward_len = mm_generate_sequence(model, N, seq_backward, -1);
+        seq_backward_strlen = sequence_strlen(seq_backward, seq_backward_len);
+
+        <span class="Comment">// printf(&quot;Reverse sequence (%d, %d): &quot;, seq_backward_len, seq_backward_strlen);</span>
+        <span class="Comment">// sequence_print(seq_backward, seq_backward_len);</span>
+
+        <span class="Statement">if</span> (seq_backward_len) {
+            sequence_concat(sentence, seq_backward + seq_backward_len - 1,
+                    MAX_LINE_LENGTH, seq_backward_len, -1);
+        }
+    } <span class="Statement">else</span> {
+        seq_backward_strlen = 0;
+    }
+
+    <span class="Comment">// printf(&quot;Sentence: %s\n&quot;, sentence);</span>
+    <span class="Statement">if</span> (generate_forward &amp;&amp; generate_backward &amp;&amp; seq_backward_strlen) {
+        <span class="Comment">// Skip the overlapping ngram</span>
+        seq_skip = N-1;
+        seq_forward_len -= seq_skip;
+
+        <span class="Comment">// Add space in between forward and backward parts of the sentence</span>
+        sentence[seq_backward_strlen - 1] = ' ';
+    }
+
+    <span class="Statement">if</span> (generate_forward) {
+        sequence_concat(sentence + seq_backward_strlen, seq_forward + seq_skip, MAX_LINE_LENGTH, seq_forward_len, 1);
+    }
+
+    <span class="Statement">if</span> (!generate_forward &amp;&amp; !generate_backward) {
+        <span class="Statement">return</span> 0;
+    }
+
+    <span class="Comment">// printf(&quot;Sentence: %s\n&quot;, sentence);</span>
+    <span class="Statement">return</span> 1;
+}
+
+<span class="Type">int</span>
+score_response(<span class="Type">char</span> *response) {
+    <span class="Statement">return</span> response ? strlen(response) : 0;
+}
+
+<span class="Comment">// Generate a response to a sentence. Optionally learn the input.</span>
+<span class="Type">int</span>
+mm_respond_and_learn(struct markov_model *model, const <span class="Type">char</span> line[], <span class="Type">char</span> *best_response, <span class="Type">char</span> learn) {
+    <span class="Type">unsigned</span> <span class="Type">int</span> line_len = strlen(line) + 1;
+    <span class="Type">unsigned</span> <span class="Type">int</span> num_tokens;
+    <span class="Type">int</span> num_words;
+    <span class="Type">char</span> *line_copy;
+    <span class="Type">char</span> *words[MAX_LINE_WORDS];
+    <span class="Type">char</span> *initial_ngram[N];
+    <span class="Type">char</span> response[MAX_LINE_LENGTH];
+    <span class="Type">int</span> score, best_score = ~1;
+
+    <span class="Comment">// Copy the line because it is going to be tokenized and stored in the model</span>
+    line_copy = malloc(line_len * <span class="Statement">sizeof</span>(<span class="Type">char</span>));
+    <span class="Statement">if</span> (!line_copy) {
+        perror(&quot;malloc&quot;);
+        <span class="Statement">return</span> 0;
+    }
+    strncpy(line_copy, line, line_len);
+
+    <span class="Comment">// Tokenize the sentence</span>
+    num_tokens = tokenize_sentence(line_copy, words);
+
+    <span class="Comment">// Learn the input sequence</span>
+    <span class="Statement">if</span> (learn &amp;&amp; !mm_learn_sequence(model, words, num_tokens)) {
+        fprintf(<span class="Constant">stderr</span>, &quot;Failed to learn a sequence<span class="Special">\n</span>&quot;);
+        <span class="Statement">return</span> 0;
+    }
+
+    <span class="Comment">// Ignore the sentinel padding in the sequence</span>
+    num_words = num_tokens - 2*(N-1);
+    <span class="Comment">// words = &amp;words[2];</span>
+    <span class="Comment">// printf(&quot;Num words: %d\n&quot;, num_words);</span>
+
+    <span class="Comment">// Try to generate a response based on N-grams from the input. If that does</span>
+    <span class="Comment">// not yield anything useful, try (N-1)-grams, and so on, until we hit 0,</span>
+    <span class="Comment">// and then just pick a random sentence not based on the input.</span>
+    <span class="Statement">for</span> (<span class="Type">int</span> m = (num_words &lt; N ? num_words : N); m &gt; 0; m--) {
+        <span class="Comment">// printf(&quot;m=%d\n&quot;, m);</span>
+
+        <span class="Comment">// Generate a candidate response for each m-gram in the input</span>
+        <span class="Statement">for</span> (<span class="Type">int</span> i = 0; i &lt;= num_words-m; i++) {
+            <span class="Comment">// printf(&quot;i: %d, m: %d, num_words-m: %d\n&quot;, i, m, num_words-m);</span>
+
+            <span class="Comment">// Copy the m-gram, with null termination</span>
+            <span class="Statement">for</span> (<span class="Type">int</span> j = 0; j &lt; m; j++) {
+                initial_ngram[j] = words[i+j+N-1];
+                <span class="Comment">// printf(&quot;Ngram %d: %s\n&quot;, j+N-1, initial_ngram[j]);</span>
+            }
+            initial_ngram[m] = <span class="Constant">NULL</span>;
+
+            <span class="Comment">// Generate a candidate response from this ngram</span>
+            <span class="Statement">if</span> (mm_generate_sentence(model, (const <span class="Type">char</span> **)initial_ngram, response)) {
+                score = score_response(response);
+                <span class="Comment">// printf(&quot;Score %d: %s\n&quot;, score, response);</span>
+                <span class="Statement">if</span> (score &gt; best_score) {
+                    best_score = score;
+                    strncpy(best_response, response, MAX_LINE_LENGTH);
+                }
+                <span class="Comment">// printf(&quot;\n&quot;);</span>
+            }
+        }
+
+        <span class="Comment">// If we get a good response, we're done.</span>
+        <span class="Statement">if</span> (best_score &gt; 0) {
+            <span class="Statement">return</span> 1;
+        }
+    }
+
+    <span class="Comment">// Last resort: generate a sentence from sentinels</span>
+    <span class="Statement">return</span> mm_generate_sentence(model, sentinel_sentence, best_response);
+}
+
+struct markov_model*
+mm_new() {
+    struct markov_model *model = malloc(<span class="Statement">sizeof</span> (struct markov_model));
+    <span class="Statement">if</span> (!model) <span class="Statement">return</span> <span class="Constant">NULL</span>;
+
+    <span class="Comment">// Create the ngram model for forward lookups</span>
+    model-&gt;forward = gram_new();
+    <span class="Statement">if</span> (!model-&gt;forward) {
+        free(model);
+        <span class="Statement">return</span> <span class="Constant">NULL</span>;
+    }
+    model-&gt;forward-&gt;next = hash_new();
+
+    <span class="Comment">// Create the ngram model for backward lookups</span>
+    model-&gt;backward = gram_new();
+    <span class="Statement">if</span> (!model-&gt;backward) {
+        free(model);
+        <span class="Statement">return</span> <span class="Constant">NULL</span>;
+    }
+    model-&gt;backward-&gt;next = hash_new();
+
+    <span class="Statement">return</span> model;
+}
+
+<span class="Type">void</span>
+mm_print(struct markov_model *model) {
+    printf(&quot;FORWARD<span class="Special">\n</span>&quot;);
+    gram_print(model-&gt;forward);
+    printf(&quot;BACKWARD<span class="Special">\n</span>&quot;);
+    gram_print(model-&gt;backward);
+}
+
+<span class="Type">int</span>
+mm_learn_file(struct markov_model *model, <span class="Type">char</span> *corpus_path) {
+    <span class="Type">FILE</span> *corpus_file;
+    <span class="Type">char</span> line[MAX_LINE_LENGTH];
+
+    <span class="Comment">// Read the corpus file</span>
+    corpus_file = fopen(corpus_path, &quot;r&quot;);
+    <span class="Statement">if</span> (!corpus_file) {
+        perror(&quot;fopen&quot;);
+        <span class="Statement">return</span> 0;
+    }
+
+    <span class="Comment">// Each line of the corpus is a sentence.</span>
+    <span class="Comment">// Read each line.</span>
+    <span class="Statement">while</span> (!feof(corpus_file)) {
+        <span class="Comment">// Get the line</span>
+        <span class="Statement">if</span> (!fgets(line, <span class="Statement">sizeof</span>(line), corpus_file)) {
+            <span class="Statement">break</span>;
+        }
+        <span class="Comment">// Learn the ngram frequencies of the sentence</span>
+        <span class="Statement">if</span> (!mm_learn_sentence(model, line)) {
+            fprintf(<span class="Constant">stderr</span>, &quot;Failed to learn a sentence<span class="Special">\n</span>&quot;);
+            <span class="Comment">// Attempt no recovery</span>
+            <span class="Statement">break</span>;
+        }
+    }
+
+    fclose(corpus_file);
+    <span class="Statement">return</span> 1;
+}
+</pre>
+</body>
+</html>
+<!-- vim: set foldmethod=manual : -->

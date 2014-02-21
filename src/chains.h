@@ -21,16 +21,17 @@ mm_print(struct markov_model *model);
 // learning
 
 int
-mm_learn_ngram(struct markov_model *model, char **ngram);
+mm_learn_ngram(struct markov_model *model, const char **ngram);
 
 int
-mm_learn_sequence(struct markov_model *model, char *words[], unsigned int len);
+mm_learn_sequence(struct markov_model *model, const char **words,
+		unsigned int len);
 
 int
 mm_learn_sentence(struct markov_model *model, const char *line);
 
 int
-mm_learn_file(struct markov_model *model, char *corpus_path);
+mm_learn_file(struct markov_model *model, const char *corpus_path);
 
 // generating
 

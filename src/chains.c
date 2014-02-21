@@ -78,10 +78,10 @@ print_ngram(const char *ngram[], int n) {
 }
 
 int
-learn_ngram(struct gram *stats, char **ngram, int direction) {
+learn_ngram(struct gram *stats, const char **ngram, int direction) {
 	int i;
 	struct gram *substat;
-	char *word;
+	const char *word;
 
 	// Increment total count of 1-grams
 	stats->value++;
@@ -93,7 +93,7 @@ learn_ngram(struct gram *stats, char **ngram, int direction) {
 		word = ngram[direction > 0 ? i : N - i - 1];
 
 		// Lookup by the next word
-		substat = stats->next ? hash_get(stats->next, word) : NULL;
+		substat = stats->next ? hash_get(stats->next, (char *)word) : NULL;
 
 		// If the tree does not reach this word, add a new node
 		if (!substat) {
@@ -111,7 +111,7 @@ learn_ngram(struct gram *stats, char **ngram, int direction) {
 				}
 			}
 
-			hash_set(stats->next, word, substat);
+			hash_set(stats->next, (char *)word, substat);
 		}
 
 		// Increment the count for this i-gram
@@ -125,7 +125,7 @@ learn_ngram(struct gram *stats, char **ngram, int direction) {
 }
 
 int
-mm_learn_ngram(struct markov_model *model, char **ngram) {
+mm_learn_ngram(struct markov_model *model, const char **ngram) {
 	return
 		learn_ngram(model->forward, ngram, 1) &&
 		learn_ngram(model->backward, ngram, -1);
@@ -165,7 +165,8 @@ tokenize_sentence(char *line, char **words) {
 
 // Learn a sequence of n words
 int
-mm_learn_sequence(struct markov_model *model, char *words[], unsigned int len) {
+mm_learn_sequence(struct markov_model *model, const char **words,
+		unsigned int len) {
 	// Learn each ngram in the sequence
 	for (unsigned int i = 0; i <= len - N; i++) {
 		if (!mm_learn_ngram(model, &words[i])) return 0;
@@ -192,7 +193,7 @@ mm_learn_sentence(struct markov_model *model, const char *line) {
 	num_words = tokenize_sentence(line_copy, words);
 
 	// Learn the sequence of words
-	if (!mm_learn_sequence(model, words, num_words)) {
+	if (!mm_learn_sequence(model, (const char **)words, num_words)) {
 		fprintf(stderr, "Failed to learn a sentence\n");
 		return 0;
 	}
@@ -494,7 +495,7 @@ mm_respond_and_learn(struct markov_model *model, const char line[], char *best_r
 	num_tokens = tokenize_sentence(line_copy, words);
 
 	// Learn the input sequence
-	if (learn && !mm_learn_sequence(model, words, num_tokens)) {
+	if (learn && !mm_learn_sequence(model, (const char **)words, num_tokens)) {
 		fprintf(stderr, "Failed to learn a sequence\n");
 		return 0;
 	}
@@ -576,7 +577,7 @@ mm_print(struct markov_model *model) {
 }
 
 int
-mm_learn_file(struct markov_model *model, char *corpus_path) {
+mm_learn_file(struct markov_model *model, const char *corpus_path) {
 	FILE *corpus_file;
 	char line[MAX_LINE_LENGTH];
 

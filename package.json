@@ -1,6 +1,6 @@
 {
 	"name": "chains",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"repo": "clehner/chains",
 	"description": "Markov chains",
 	"keywords": ["markov", "chains"],
