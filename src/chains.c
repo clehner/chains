@@ -175,7 +175,7 @@ mm_learn_sequence(struct markov_model *model, char *words[], unsigned int len) {
 
 // Learn a sentence.
 int
-mm_learn_sentence(struct markov_model *model, char *line) {
+mm_learn_sentence(struct markov_model *model, const char *line) {
 	char *words[MAX_LINE_WORDS];
 	unsigned int num_words;
 
