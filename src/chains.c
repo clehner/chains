@@ -204,7 +204,9 @@ mm_learn_sentence(struct markov_model *model, const char *line) {
 void *
 gram_pick(struct gram *stats) {
 	unsigned int index_sum = 0;
-	unsigned int index_pick = rand() % stats->value;
+	unsigned int index_pick;
+	if (!stats->value) return NULL;
+	index_pick = rand() % stats->value;
 
 	hash_each(stats->next, {
 		// Increment the running total
